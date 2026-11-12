@@ -13,3 +13,4 @@ isolate*.log
 flamegraph.html
 out.pdf
 .DS_Store
+package-lock.json

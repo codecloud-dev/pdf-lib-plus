@@ -1,3 +1,9 @@
+> **This is `pdf-lib-plus`, a community-maintained fork of [pdf-lib](https://github.com/Hopding/pdf-lib).**
+> Upstream has not published a release since 2022. This fork keeps the public API
+> unchanged and starts by closing the security issues that were left open upstream —
+> see [CHANGELOG.md](./CHANGELOG.md). MIT licensed, same as the original, with the
+> original copyright notices preserved.
+
 <a href="https://pdf-lib.js.org">
 <h1 align="center">
 <img alt="pdf-lib" height="300" src="https://raw.githubusercontent.com/Hopding/pdf-lib-docs/master/assets/logo-full.svg?sanitize=true">
