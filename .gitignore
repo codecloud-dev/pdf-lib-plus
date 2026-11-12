@@ -1,0 +1,15 @@
+node_modules/
+build/
+cjs/
+es/
+dist/
+ts3.4/
+coverage/
+tsBuildInfo.json
+scratchpad/build/
+apps/node-build/
+apps/node/tsBuildInfo.json
+isolate*.log
+flamegraph.html
+out.pdf
+.DS_Store
