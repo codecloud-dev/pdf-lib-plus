@@ -22,6 +22,11 @@ updates:
       - dependency-name: "@types/prettier"
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
+      # downlevel-dts 0.11.x 依赖 typescript next（nightly 7.x），
+      # 与本仓固定的 TypeScript 3.9 构建链不兼容（PR #4 真实 CI 失败：
+      # ts.createProgram is not a function）。0.x 升级被判成 minor，
+      # 所以要按依赖名单独挡住，不能只靠 semver-major 过滤。
+      - dependency-name: "downlevel-dts"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -32,3 +37,9 @@ updates:
       actions-minor-patch:
         patterns: ["*"]
         update-types: ["minor", "patch"]
+
+    ignore:
+      # actions 大版本升级会连带改 runner 镜像、Node/Python 默认版本与
+      # 权限模型，必须由人工跑一遍完整 CI 再决定，不收自动 PR。
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
