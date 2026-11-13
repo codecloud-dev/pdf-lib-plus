@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: yarn
+      # Lockfile 必须与 package.json 完全一致；不允许 CI 顺手把类型包升级到
+      # TypeScript 3.9 解析不了的版本（见 package.json 的 resolutions）。
+      - name: 安装依赖（frozen lockfile，不跑安装脚本）
+        run: yarn install --frozen-lockfile --ignore-scripts
+      - name: 类型检查
+        run: yarn typecheck
+      - name: 单元测试
+        run: yarn test
+      - name: 全格式构建（cjs / es / esm / umd / downlevel-dts）
+        run: yarn build
