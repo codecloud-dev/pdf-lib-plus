@@ -3,6 +3,10 @@
 > unchanged and starts by closing the security issues that were left open upstream —
 > see [CHANGELOG.md](./CHANGELOG.md). MIT licensed, same as the original, with the
 > original copyright notices preserved.
+>
+> **文档 / Docs**: [中文说明 README.zh.md](./README.zh.md) ·
+> [Contributing Guide](./CONTRIBUTING.md) · [Code of Conduct](./CODE_OF_CONDUCT.md) ·
+> [Security Policy](./SECURITY.md)
 
 <a href="https://pdf-lib.js.org">
 <h1 align="center">
