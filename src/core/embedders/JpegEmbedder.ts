@@ -99,8 +99,22 @@ class JpegEmbedder {
 
     const colorSpace = channelName;
 
+    // The scan above reads through a DataView that honours `byteOffset` and
+    // `byteLength`, but `imageData` may still be a live view onto a larger,
+    // shared ArrayBuffer (a Node `Buffer` slice). Handing that view straight
+    // to `PDFRawStream` would keep a reference to the caller's whole backing
+    // buffer and let a later reuse of that pooled memory silently corrupt the
+    // JPEG bytes before the PDF is serialized. Store a self-contained,
+    // zero-offset copy instead; the common (non-view) case stays zero-copy.
+    // See https://github.com/Hopding/pdf-lib/pull/1273
+    const ownedData =
+      imageData.byteOffset === 0 &&
+      imageData.byteLength === imageData.buffer.byteLength
+        ? imageData
+        : new Uint8Array(imageData);
+
     return new JpegEmbedder(
-      imageData,
+      ownedData,
       bitsPerComponent,
       width,
       height,

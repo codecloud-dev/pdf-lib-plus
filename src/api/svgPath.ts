@@ -264,6 +264,12 @@ const runners: CmdToOperatorsMap = {
   },
 
   T(a) {
+    // The control point of a smooth quadratic is the reflection of the
+    // previous control point about the current point (or the current point
+    // itself when the previous command was not a quadratic). `px`/`py` now
+    // hold the control point actually used by this curve, which is exactly
+    // what the next T/t command must reflect. Reflecting a second time here
+    // makes consecutive T commands use the wrong control point (issue #1443).
     if (px === null || py === null) {
       px = cx;
       py = cy;
@@ -273,8 +279,6 @@ const runners: CmdToOperatorsMap = {
     }
 
     const cmd = appendQuadraticCurve(px, py, a[0], a[1]);
-    px = cx - (px - cx);
-    py = cy - (py - cy);
     cx = a[0];
     cy = a[1];
     return cmd;

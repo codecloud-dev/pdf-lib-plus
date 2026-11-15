@@ -6,7 +6,7 @@
   <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/pdf--lib--plus-%E7%A4%BE%E5%8C%BA%E7%BB%B4%E6%8A%A4%E5%88%86%E6%94%AF-8a7bff?style=for-the-badge&logo=github&logoColor=white" alt="pdf-lib-plus: 社区维护分支"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/TypeScript-3.9-14181A?style=for-the-badge&logo=typescript&logoColor=3178C6" alt="TypeScript: 3.9"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/MIT-%E8%AE%B8%E5%8F%AF%E4%B8%8D%E5%8F%98-14181A?style=for-the-badge&logo=open-source-initiative&logoColor=3DDC84" alt="MIT: 许可不变"></a>
-  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/tests-635-14181A?style=for-the-badge&logo=jest&logoColor=C21325" alt="tests: 635"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/tests-654-14181A?style=for-the-badge&logo=jest&logoColor=C21325" alt="tests: 654"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87_%2F_EN-14181A?style=for-the-badge&logo=gitbook&logoColor=2088FF" alt="docs: 中文 / EN"></a>
 </p>
 
@@ -15,7 +15,7 @@
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/codecloud-dev/pdf-lib-plus?style=flat-square&color=37d5d3" alt="License"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/stargazers"><img src="https://img.shields.io/github/stars/codecloud-dev/pdf-lib-plus?style=flat-square&color=ff7ac3" alt="Stars"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/commits/master"><img src="https://img.shields.io/github/last-commit/codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff" alt="Last commit"></a>
-  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/tests-635_passed-3DDC84?style=flat-square" alt="tests: 635 passed"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/tests-654_passed-3DDC84?style=flat-square" alt="tests: 654 passed"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/since-upstream_2022-ff7ac3?style=flat-square" alt="since: upstream 2022"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/pulls"><img src="https://img.shields.io/badge/PRs-welcome-8a7bff?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
 </p>
@@ -65,13 +65,13 @@ Deno、React Native 中工作。本分支**不改公开 API**——原来怎么�
 ## 安装与使用
 
 ```bash
-npm install pdf-lib-plus
+npm install @codecloud-dev/pdf-lib-plus
 # 或
-yarn add pdf-lib-plus
+yarn add @codecloud-dev/pdf-lib-plus
 ```
 
 ```js
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib-plus';
+import { PDFDocument, StandardFonts, rgb } from '@codecloud-dev/pdf-lib-plus';
 
 const pdfDoc = await PDFDocument.create();
 const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);

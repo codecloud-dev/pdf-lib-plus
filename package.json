@@ -121,6 +121,7 @@
   },
   "license": "MIT",
   "private": false,
+  "sideEffects": false,
   "homepage": "https://pdf-lib.js.org",
   "repository": {
     "type": "git",

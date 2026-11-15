@@ -139,4 +139,28 @@ describe(`svgPathToOperators`, () => {
       '100 100 m,100 100 100 200 v,100 300 200 200 v,90 120 m,90 120 90 220 v,90 320 190 220 v',
     );
   });
+
+  it(`reflects the quadratic control point across consecutive T commands`, () => {
+    // Regression test for upstream issue #1443 / PR #1444. `T` used to
+    // reflect (px, py) a second time after drawing the curve, so every T after
+    // the first one in a row derived its control point from the wrong point.
+    const operators = svgPathToOperators(
+      'M 10,25 Q 30,0 50,25 Q 70,50 90,25 T 130,25 T 170,25',
+    );
+    expect(operators.length).toBe(5);
+    expect(operators.toString()).toBe(
+      '10 25 m,30 0 50 25 v,70 50 90 25 v,110 0 130 25 v,150 50 170 25 v',
+    );
+  });
+
+  it(`uses the current point as the first control point for a leading T`, () => {
+    // With no preceding quadratic command there is no control point to
+    // reflect, so the current point itself is used. Subsequent T commands must
+    // then reflect that point (and not re-reflect it).
+    const operators = svgPathToOperators('M 0,0 T 20,0 T 40,0 T 60,0');
+    expect(operators.length).toBe(4);
+    expect(operators.toString()).toBe(
+      '0 0 m,0 0 20 0 v,40 0 40 0 v,40 0 60 0 v',
+    );
+  });
 });
