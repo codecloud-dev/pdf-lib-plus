@@ -11,6 +11,7 @@
 </p>
 
 <p align="center">
+  <a href="https://www.npmjs.com/package/@codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/npm/v/@codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff&label=npm&logo=npm&logoColor=white" alt="npm: v1.18.2"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/codecloud-dev/pdf-lib-plus/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/codecloud-dev/pdf-lib-plus?style=flat-square&color=37d5d3" alt="License"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/stargazers"><img src="https://img.shields.io/github/stars/codecloud-dev/pdf-lib-plus?style=flat-square&color=ff7ac3" alt="Stars"></a>
@@ -41,7 +42,7 @@
 > 上游 [pdf-lib](https://github.com/Hopding/pdf-lib) 自 2022 年起没有再发布版本，
 > 一批被报告过的解析 / 解码安全问题一直停在 issue 和 PR 里没进发行版。
 > **pdf-lib-plus** 就是为这件事存在的：保持公开 API 与 MIT 许可**完全不变**，
-> 把那些修复真正合进代码、配上回归测试、跑完 654 个用例再发版。
+> 把那些修复真正合进代码、配上回归测试、跑完 654 个用例才发版。
 
 | 你关心什么 | 答案 |
 | --- | --- |
