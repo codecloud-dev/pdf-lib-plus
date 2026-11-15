@@ -1,62 +1,77 @@
-> **This is `pdf-lib-plus`, a community-maintained fork of [pdf-lib](https://github.com/Hopding/pdf-lib).**
-> Upstream has not published a release since 2022. This fork keeps the public API
-> unchanged and starts by closing the security issues that were left open upstream —
-> see [CHANGELOG.md](./CHANGELOG.md). MIT licensed, same as the original, with the
-> original copyright notices preserved.
->
-> **文档 / Docs**: [中文说明 README.zh.md](./README.zh.md) ·
-> [Contributing Guide](./CONTRIBUTING.md) · [Code of Conduct](./CODE_OF_CONDUCT.md) ·
-> [Security Policy](./SECURITY.md)
+<p align="center">
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://raw.githubusercontent.com/Hopding/pdf-lib-docs/master/assets/logo-full.svg?sanitize=true" height="150" alt="pdf-lib-plus"></a>
+</p>
 
-<a href="https://pdf-lib.js.org">
-<h1 align="center">
-<img alt="pdf-lib" height="300" src="https://raw.githubusercontent.com/Hopding/pdf-lib-docs/master/assets/logo-full.svg?sanitize=true">
-</h1>
-</a>
+<p align="center">
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/pdf--lib--plus-%E7%A4%BE%E5%8C%BA%E7%BB%B4%E6%8A%A4%E5%88%86%E6%94%AF-8a7bff?style=for-the-badge&logo=github&logoColor=white" alt="pdf-lib-plus: 社区维护分支"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/TypeScript-3.9-14181A?style=for-the-badge&logo=typescript&logoColor=3178C6" alt="TypeScript: 3.9"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/MIT-%E8%AE%B8%E5%8F%AF%E4%B8%8D%E5%8F%98-14181A?style=for-the-badge&logo=open-source-initiative&logoColor=3DDC84" alt="MIT: 许可不变"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/tests-635-14181A?style=for-the-badge&logo=jest&logoColor=C21325" alt="tests: 635"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87_%2F_EN-14181A?style=for-the-badge&logo=gitbook&logoColor=2088FF" alt="docs: 中文 / EN"></a>
+</p>
 
-<div align="center">
-  <strong>Create and modify PDF documents in any JavaScript environment.</strong>
-</div>
-<div align="center">
-  Designed to work in any modern JavaScript runtime. Tested in Node, Browser, Deno, and React Native environments.
-</div>
+<p align="center">
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/codecloud-dev/pdf-lib-plus/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/codecloud-dev/pdf-lib-plus?style=flat-square&color=37d5d3" alt="License"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/stargazers"><img src="https://img.shields.io/github/stars/codecloud-dev/pdf-lib-plus?style=flat-square&color=ff7ac3" alt="Stars"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/commits/master"><img src="https://img.shields.io/github/last-commit/codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff" alt="Last commit"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/tests-635_passed-3DDC84?style=flat-square" alt="tests: 635 passed"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/since-upstream_2022-ff7ac3?style=flat-square" alt="since: upstream 2022"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/pulls"><img src="https://img.shields.io/badge/PRs-welcome-8a7bff?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
+</p>
 
-<br />
+<h1 align="center">pdf-lib-plus</h1>
 
-<div align="center">
-  <!-- NPM Version -->
-  <a href="https://www.npmjs.com/package/pdf-lib">
-    <img
-      src="https://img.shields.io/npm/v/pdf-lib.svg?style=flat-square"
-      alt="NPM Version"
-    />
-  </a>
-  <!-- Build Status -->
-  <a href="https://circleci.com/gh/Hopding/pdf-lib">
-    <img
-      src="https://img.shields.io/circleci/project/github/Hopding/pdf-lib/master.svg?style=flat-square&label=CircleCI"
-      alt="CircleCI Build Status"
-    />
-  </a>
-  <!-- Prettier Badge -->
-  <a href="https://prettier.io/">
-    <img
-      src="https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat-square"
-      alt="Prettier Badge"
-    />
-  </a>
-  <!-- Discord Badge -->
-  <a href="https://discord.gg/Y7uuVMc">
-    <img
-      src="https://img.shields.io/static/v1?label=discord&message=pdf-lib&color=566fbb&style=flat-square"
-      alt="Discord Badge"
-    />
-  </a>
-</div>
+<p align="center"><b>pdf-lib 的社区维护分支 · Community-maintained fork of pdf-lib</b><br>
+公开 API 不变 · MIT 许可不变 · 先把上游遗留的安全问题修掉<br>
+<em>Same public API, same MIT license — upstream security issues, actually fixed.</em></p>
 
-<br />
+<p align="center">
+  <a href="README.md">中文 / EN</a> ·
+  <a href="README.zh.md">📖 完整中文说明</a> ·
+  <a href="CHANGELOG.md">更新日志</a> ·
+  <a href="SECURITY.md">安全政策</a> ·
+  <a href="CONTRIBUTING.md">贡献指南</a>
+</p>
 
-> **Learn more at [pdf-lib.js.org](https://pdf-lib.js.org)**
+---
+
+## 🇨🇳 三分钟看懂（中文导读）
+
+> 上游 [pdf-lib](https://github.com/Hopding/pdf-lib) 自 2022 年起没有再发布版本，
+> 一批被报告过的解析 / 解码安全问题一直停在 issue 和 PR 里没进发行版。
+> **pdf-lib-plus** 就是为这件事存在的：保持公开 API 与 MIT 许可**完全不变**，
+> 把那些修复真正合进代码、配上回归测试、跑完 635 个用例再发版。
+
+| 你关心什么 | 答案 |
+| --- | --- |
+| 老项目要改代码吗 | **不用**。原来 `import ... from 'pdf-lib'` 怎么写，现在还怎么写 |
+| 修了什么 | 日期解析 ReDoS、JPEG marker 越界/死循环、xref `/W` 宽度、解码流解压炸弹，以及本轮新增的 SVG / JPEG 视图 / Error 原型链等修复，见 [CHANGELOG.md](CHANGELOG.md) |
+| 测试覆盖 | 67 套件 / **635 用例**，`typecheck` + `test` + 全格式 `build` 全绿 |
+| 中文文档 | [README.zh.md](README.zh.md) 有完整的中文安装、示例与工具链说明 |
+| 许可证 | MIT，保留原作者全部版权声明 |
+
+**安装 / Install**
+
+```bash
+npm install pdf-lib-plus   # 或 yarn add pdf-lib-plus
+```
+
+```js
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib-plus';
+const doc = await PDFDocument.create();
+const page = doc.addPage([550, 750]);
+page.drawText('Hello PDF', { x: 50, y: 700, size: 30, color: rgb(0, 0.15, 0.35) });
+const bytes = await doc.save();
+```
+
+> 中文字符需自行嵌入 CJK 字体（标准 14 字体不含中文字形），这是 pdf-lib 原有行为，本分支未改。
+> 完整 API 文档、表单 / 图片 / 附件 / 加密等示例见下方英文正文。
+
+> **Docs / 文档**：[中文说明 README.zh.md](README.zh.md) · [Contributing](CONTRIBUTING.md) ·
+> [Code of Conduct](CODE_OF_CONDUCT.md) · [Security Policy](SECURITY.md)
+
+---
 
 ## Table of Contents
 
