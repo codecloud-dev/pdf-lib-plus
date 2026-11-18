@@ -1,6 +1,6 @@
 {
   "name": "@codecloud-dev/pdf-lib-plus",
-  "version": "1.18.3",
+  "version": "1.18.4",
   "description": "Create and modify PDF files with JavaScript",
   "author": "Andrew Dillon <andrew.dillon.j@gmail.com>",
   "contributors": [
@@ -42,6 +42,7 @@
     "test": "jest --config jest.json --runInBand",
     "testw": "jest --config jest.json --watch",
     "testc": "jest --config jest.json --coverage && open coverage/index.html",
+    "verify:intern-memory": "node --expose-gc scripts/verify-intern-memory.cjs",
     "lint": "yarn lint:prettier && yarn lint:tslint:src && yarn lint:tslint:tests",
     "lint:tslint:src": "tslint --project tsconfig.json --fix",
     "lint:tslint:tests": "tslint --project tests/tsconfig.json --fix",

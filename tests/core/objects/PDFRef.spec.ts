@@ -22,6 +22,12 @@ describe(`PDFRef`, () => {
     expect(PDFRef.of(4678, 9120)).toBe(PDFRef.of(4678, 9120));
   });
 
+  it(`keeps live refs stable while unrelated refs are interned`, () => {
+    const stable = PDFRef.of(777777, 3);
+    for (let idx = 0; idx < 2000; idx++) PDFRef.of(900000 + idx);
+    expect(PDFRef.of(777777, 3)).toBe(stable);
+  });
+
   it(`can be cloned`, () => {
     expect(PDFRef.of(4678, 9120).clone()).toBe(PDFRef.of(4678, 9120));
   });

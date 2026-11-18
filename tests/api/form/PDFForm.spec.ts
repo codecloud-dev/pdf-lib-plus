@@ -365,6 +365,46 @@ describe(`PDFForm`, () => {
     tfWidgetRefs.forEach((ref) => expect(refs2).not.toContain(ref));
   });
 
+  it(`removes widget annotation refs from page /Annots arrays (issue #1784)`, async () => {
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage();
+    const form = pdfDoc.getForm();
+    const name = 'example.text.field';
+
+    const field = form.createTextField(name);
+    field.addToPage(page, { x: 50, y: 50, width: 100, height: 20 });
+
+    const widget = field.acroField.getWidgets()[0];
+    const widgetRef = pdfDoc.context.getObjectRef(widget.dict);
+    expect(widgetRef).toBeInstanceOf(PDFRef);
+
+    const annotsBefore = page.node.Annots()?.asArray() ?? [];
+    expect(annotsBefore).toContain(widgetRef);
+
+    form.removeField(field);
+
+    const annotsAfter = page.node.Annots()?.asArray() ?? [];
+    expect(annotsAfter).not.toContain(widgetRef);
+    expect(() => form.getField(name)).toThrow();
+
+    // Recreating the same field name must not hit a stale field or a ghost annot.
+    form.createTextField(name).addToPage(page, {
+      x: 60,
+      y: 60,
+      width: 100,
+      height: 20,
+    });
+    expect(form.getField(name)).toBeInstanceOf(PDFTextField);
+
+    const reloaded = await PDFDocument.load(await pdfDoc.save());
+    const reloadedAnnots =
+      reloaded.getPages()[0].node.Annots()?.asArray() ?? [];
+    for (const ref of reloadedAnnots) {
+      expect(() => reloaded.context.lookup(ref)).not.toThrow();
+    }
+    expect(reloaded.getForm().getField(name)).toBeInstanceOf(PDFTextField);
+  });
+
   // TODO: Add method to remove APs and use `NeedsAppearances`? How would this
   //       work with RadioGroups? Just set the APs to `null`but keep the keys?
 });

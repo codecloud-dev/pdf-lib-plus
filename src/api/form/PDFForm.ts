@@ -584,7 +584,15 @@ export default class PDFForm {
 
     for (let i = 0, len = widgets.length; i < len; i++) {
       const widget = widgets[i];
-      const widgetRef = this.findWidgetAppearanceRef(field, widget);
+      // Page /Annots stores the indirect reference of the widget annotation
+      // dictionary itself, not the reference of its /AP appearance stream.
+      // Removing the appearance ref leaves a dangling /Annots entry behind
+      // (Hopding/pdf-lib#1784, #1001), which survives save/reload and makes
+      // same-name field recreation fail.
+      const widgetRef = this.doc.context.getObjectRef(widget.dict);
+      if (widgetRef === undefined) {
+        throw new Error('Could not find PDFRef for widget annotation');
+      }
 
       const page = this.findWidgetPage(widget);
       pages.add(page);

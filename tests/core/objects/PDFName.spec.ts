@@ -24,6 +24,14 @@ describe(`PDFName`, () => {
     );
   });
 
+  it(`keeps live dictionary names stable while unrelated names are interned`, () => {
+    const stable = PDFName.of('StableDictionaryKeyForInternPool');
+    for (let idx = 0; idx < 2000; idx++) {
+      PDFName.of(`UnrelatedName_${idx}`);
+    }
+    expect(PDFName.of('StableDictionaryKeyForInternPool')).toBe(stable);
+  });
+
   it(`decodes hex codes in the values`, () => {
     expect(PDFName.of('Lime#20Green')).toBe(PDFName.of('Lime Green'));
     expect(PDFName.of('paired#28#29parentheses')).toBe(

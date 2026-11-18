@@ -1,9 +1,10 @@
 import { PrivateConstructorError } from 'src/core/errors';
 import PDFObject from 'src/core/objects/PDFObject';
 import { copyStringIntoBuffer } from 'src/utils';
+import { createInternPool } from 'src/utils/intern';
 
 const ENFORCER = {};
-const pool = new Map<string, PDFRef>();
+const pool = createInternPool<PDFRef>();
 
 class PDFRef extends PDFObject {
   static of = (objectNumber: number, generationNumber = 0) => {

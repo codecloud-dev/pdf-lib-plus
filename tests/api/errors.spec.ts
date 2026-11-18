@@ -21,7 +21,7 @@ import {
 // always false unless the constructor repairs it. The library targets ES5, so
 // this is a real runtime failure, not a theoretical one (upstream PR #1439).
 describe(`custom Error subclasses`, () => {
-  const cases: Array<[string, Error, Function]> = [
+  const cases: [string, Error, new (...args: any[]) => Error][] = [
     ['EncryptedPDFError', new EncryptedPDFError(), EncryptedPDFError],
     [
       'FontkitNotRegisteredError',

@@ -8,6 +8,7 @@ import {
   toCharCode,
   toHexString,
 } from 'src/utils';
+import { createInternPool } from 'src/utils/intern';
 
 const decodeName = (name: string) =>
   name.replace(/#([\dABCDEF]{2})/g, (_, hex) => charFromHexCode(hex));
@@ -18,7 +19,7 @@ const isRegularChar = (charCode: number) =>
   !IsIrregular[charCode];
 
 const ENFORCER = {};
-const pool = new Map<string, PDFName>();
+const pool = createInternPool<PDFName>();
 
 class PDFName extends PDFObject {
   static of = (name: string): PDFName => {

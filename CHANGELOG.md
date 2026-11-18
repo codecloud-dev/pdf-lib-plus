@@ -8,6 +8,41 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.18.4 - 2026-11-18
+
+本版继续只做**不改公开 API** 的可靠性维护，直接修复 pdf-lib 公开仓库里两个
+真实 open issue，并把修复做成可重复运行的回归验证。
+
+### 修复
+
+- **`removeField()` 留下悬空 widget 引用（上游 #1784 / #1001）**：旧实现把
+  `/AP/N` 外观流引用当成页面 `/Annots` 中的 widget 引用传给
+  `PDFPageLeaf.removeAnnot()`，字典对象删除后页面仍指向不存在的对象。
+  现改为用 `context.getObjectRef(widget.dict)` 取 widget 注解自身的间接引用；
+  删除后 `/Annots` 不再残留死引用，同名字段可重新创建，save → load 后每个
+  annot 引用都能正常 `context.lookup()`。
+- **`PDFRef` / `PDFName` 强引用池导致长生命周期进程内存泄漏（上游 #1799）**：
+  两个 identity-sensitive 对象原本被模块级 `Map` 永久强引用，批量加载/丢弃
+  文档后堆内存只增不减。现改为 `WeakRef` + `FinalizationRegistry` 弱引用池：
+  活文档仍拿到完全相同的实例（Map key 的 identity 语义不变），文档被丢弃后
+  条目可回收；finalizer 只删除“当前仍指向同一个 dead WeakRef”的键，避免晚到
+  的 finalizer 误删已替换的新实例。无 WeakRef 的老运行时自动回落到原行为。
+- **回归测试**：新增表单字段删除后 `/Annots` 清理、同名重建、save/load 无
+  悬空引用测试；新增活对象在大量新 key 入池后仍 identity 稳定的测试。
+- **真实 GC 验证脚本**：`scripts/verify-intern-memory.cjs` 用
+  `node --expose-gc` 真实创建 1000 个唯一 `PDFName` / `PDFRef` 并丢弃，验证
+  1000/1000 被回收，同时常驻 key 仍返回同一实例。
+
+### 验证
+
+`yarn typecheck`、`yarn test`（70 suites / 667 tests）、`yarn lint`、全格式
+`yarn build`、`node --expose-gc scripts/verify-intern-memory.cjs` 均真跑通过，
+示例 `examples/text-extraction.cjs` 与 `npm pack --dry-run` 亦真跑通过。
+
+**真实基准**（`node scripts/benchmark.cjs 200`，200 页 × 40 行/页，本机实测，
+数值随机器负载波动，不代表性能回退）：save 207247 B（202.4 KB）、save 126.3 ms、
+load 42.0 ms、全页 extractText 125.7 ms、提取字符 385680、save+load 吞吐 1.17 MB/s。
+
 ## 1.18.3 - 2026-11-18
 
 本版在**不改变任何原有公开 API** 的前提下，补上 pdf-lib 1.x 一直缺失的

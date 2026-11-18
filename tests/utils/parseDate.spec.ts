@@ -18,12 +18,12 @@ describe(`parseDate`, () => {
   });
 
   it(`parses a full date with a numeric offset`, () => {
-    const date = parseDate("D:20260530120000+08'00'");
+    const date = parseDate('D:20260530120000+08\'00\'');
     expect(date!.toISOString()).toBe('2026-05-30T04:00:00.000Z');
   });
 
   it(`parses a full date with a negative numeric offset`, () => {
-    const date = parseDate("D:20260530120000-05'30'");
+    const date = parseDate('D:20260530120000-05\'30\'');
     expect(date!.toISOString()).toBe('2026-05-30T17:30:00.000Z');
   });
 

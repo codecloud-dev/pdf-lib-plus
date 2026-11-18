@@ -1,17 +1,18 @@
-# 迁移指南（1.18.2 → 1.18.3）
+# 迁移指南（1.18.2 → 1.18.4）
 
 ## 结论先说
 
-**没有破坏性改动。** 1.18.3 只新增导出与只读访问器，原有
-`PDFDocument` / `PDFPage` / 表单 / 图片 / 嵌入字体 API 的签名和行为不变。
+**没有破坏性改动。** 1.18.3 只新增导出与只读访问器；1.18.4 修复表单删除后的
+`/Annots` 清理和 identity 池内存回收，均不改变原有
+`PDFDocument` / `PDFPage` / 表单 / 图片 / 嵌入字体 API 的签名和预期行为。
 无需改业务代码即可升级。
 
 ## 安装
 
 ```bash
-npm install @codecloud-dev/pdf-lib-plus@1.18.3
+npm install @codecloud-dev/pdf-lib-plus@1.18.4
 # 或
-yarn add @codecloud-dev/pdf-lib-plus@1.18.3
+yarn add @codecloud-dev/pdf-lib-plus@1.18.4
 ```
 
 如果还在用未发布的 `pdf-lib-plus`（无 scope）或上游 `pdf-lib` 的旧安装命令，
@@ -58,13 +59,13 @@ page.extractTextLines();
 | 新增 `PDFContentStream#getOperators()` | 无，返回副本，不改内部数组 |
 | 新增 `PDFPageLeaf#setContentStream(ref)` | 无，供文本删除重建内容流使用 |
 | `extractText*` / `removeTextContaining` | 无，旧代码不调用就不受影响 |
-| 版本 1.18.3 | npm registry 正式发布 |
+| 版本 1.18.4 | npm registry 正式发布 |
 
 ## 升级后验证
 
 ```bash
 yarn typecheck
-yarn test        # 70 suites / 664 tests
+yarn test        # 70 suites / 667 tests
 yarn build
 ```
 

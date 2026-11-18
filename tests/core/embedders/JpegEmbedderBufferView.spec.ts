@@ -27,7 +27,10 @@ const offsetBufferView = () => {
   const prefix = Buffer.from([0xaa, 0xbb, 0xcc, 0xdd]);
   const suffix = Buffer.from([0xee, 0xff, 0x11, 0x22]);
   const backing = Buffer.concat([prefix, Buffer.from(minimalJpeg), suffix]);
-  const view = backing.subarray(prefix.length, prefix.length + minimalJpeg.length);
+  const view = backing.subarray(
+    prefix.length,
+    prefix.length + minimalJpeg.length,
+  );
 
   expect(view.byteOffset).toBeGreaterThan(0);
   expect(view.byteLength).toBe(minimalJpeg.length);
