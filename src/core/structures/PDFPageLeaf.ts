@@ -122,6 +122,11 @@ class PDFPageLeaf extends PDFDict {
     Contents.push(contentStreamRef);
   }
 
+  /** 用单个内容流整体替换本页 Contents（供文本编辑/内容流重写使用）。 */
+  setContentStream(contentStreamRef: PDFRef): void {
+    this.set(PDFName.Contents, contentStreamRef);
+  }
+
   wrapContentStreams(startStream: PDFRef, endStream: PDFRef): boolean {
     const Contents = this.Contents();
     if (Contents instanceof PDFArray) {

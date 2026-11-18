@@ -6,17 +6,17 @@
   <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/pdf--lib--plus-%E7%A4%BE%E5%8C%BA%E7%BB%B4%E6%8A%A4%E5%88%86%E6%94%AF-8a7bff?style=for-the-badge&logo=github&logoColor=white" alt="pdf-lib-plus: 社区维护分支"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/TypeScript-3.9-14181A?style=for-the-badge&logo=typescript&logoColor=3178C6" alt="TypeScript: 3.9"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/MIT-%E8%AE%B8%E5%8F%AF%E4%B8%8D%E5%8F%98-14181A?style=for-the-badge&logo=open-source-initiative&logoColor=3DDC84" alt="MIT: 许可不变"></a>
-  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/tests-654-14181A?style=for-the-badge&logo=jest&logoColor=C21325" alt="tests: 654"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/tests-664-14181A?style=for-the-badge&logo=jest&logoColor=C21325" alt="tests: 664"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/README.md"><img src="https://img.shields.io/badge/docs-%E4%B8%AD%E6%96%87_%2F_EN-14181A?style=for-the-badge&logo=gitbook&logoColor=2088FF" alt="docs: 中文 / EN"></a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/npm/v/@codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff&label=npm&logo=npm&logoColor=white" alt="npm: v1.18.2"></a>
+  <a href="https://www.npmjs.com/package/@codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/npm/v/@codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff&label=npm&logo=npm&logoColor=white" alt="npm: v1.18.3"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/codecloud-dev/pdf-lib-plus/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/codecloud-dev/pdf-lib-plus?style=flat-square&color=37d5d3" alt="License"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/stargazers"><img src="https://img.shields.io/github/stars/codecloud-dev/pdf-lib-plus?style=flat-square&color=ff7ac3" alt="Stars"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/commits/master"><img src="https://img.shields.io/github/last-commit/codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff" alt="Last commit"></a>
-  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/tests-654_passed-3DDC84?style=flat-square" alt="tests: 654 passed"></a>
+  <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/tests-664_passed-3DDC84?style=flat-square" alt="tests: 664 passed"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/badge/since-upstream_2022-ff7ac3?style=flat-square" alt="since: upstream 2022"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/pulls"><img src="https://img.shields.io/badge/PRs-welcome-8a7bff?style=flat-square&logo=github&logoColor=white" alt="PRs welcome"></a>
 </p>
@@ -29,6 +29,8 @@
 <p align="center">
   <a href="README.md">English / 中英融合主文档</a> ·
   <a href="README.zh.md">📖 本页中文说明</a> ·
+  <a href="docs/TEXT_EXTRACTION.md">文本提取 API</a> ·
+  <a href="docs/MIGRATION.md">迁移指南</a> ·
   <a href="CHANGELOG.md">更新日志</a> ·
   <a href="SECURITY.md">安全政策</a>
 </p>
@@ -88,6 +90,32 @@ const pdfBytes = await pdfDoc.save();
 > 更完整的示例（表单、图片嵌入、合并/拆分、加密文档等）见英文主 README。
 > 中文字符需嵌入支持 CJK 的字体（`@pdf-lib/fontkit` + 自定义字体），标准 14 字体
 > 不含中文字形——这是 pdf-lib 原有的行为，本分支未改。
+
+## 1.18.3 新增：文本提取与删除
+
+本分支在不改原有 API 的前提下新增：
+
+- `extractText(page)` / `extractTextFromPage(page)`：提取页面文本；
+- `PDFPage#extractText()` / `PDFPage#extractTextLines()`：页面实例方法；
+- `removeTextContaining(page, substring)`：按子串删除整段文本显示算子；
+- `PDFContentStreamParser`：把 `load()` 后的压缩内容流解析为算子。
+
+```js
+import { PDFDocument, StandardFonts, extractText, removeTextContaining } from '@codecloud-dev/pdf-lib-plus';
+
+const doc = await PDFDocument.create();
+const page = doc.addPage([612, 792]);
+const font = await doc.embedFont(StandardFonts.Helvetica);
+page.drawText('Public content', { x: 50, y: 720, size: 12, font });
+page.drawText('SECRET token ABC', { x: 50, y: 700, size: 12, font });
+
+console.log(extractText(page));                 // 两行文本
+console.log(removeTextContaining(page, 'SECRET')); // 1
+```
+
+中文等 CJK 文本需嵌入字体；1.18.3 已真实验证 `save → load` 后的 Flate
+ToUnicode CMap 多字节码解析。完整示例、能力边界与迁移说明见
+[docs/TEXT_EXTRACTION.md](docs/TEXT_EXTRACTION.md) 与 [docs/MIGRATION.md](docs/MIGRATION.md)。
 
 ## 与上游 pdf-lib 的关系
 

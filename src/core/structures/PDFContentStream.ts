@@ -28,6 +28,11 @@ class PDFContentStream extends PDFFlateStream {
     return PDFContentStream.of(dict.clone(context), operators, encode);
   }
 
+  /** 只读访问解析后的算子序列（供文本提取/内容分析使用，返回副本防改写）。 */
+  getOperators(): PDFOperator[] {
+    return this.operators.slice();
+  }
+
   getContentsString(): string {
     let value = '';
     for (let idx = 0, len = this.operators.length; idx < len; idx++) {

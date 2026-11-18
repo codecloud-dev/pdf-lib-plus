@@ -8,6 +8,50 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.18.3 - 2026-11-18
+
+本版在**不改变任何原有公开 API** 的前提下，补上 pdf-lib 1.x 一直缺失的
+内容流读取、文本提取与文本删除能力，并修复中文嵌入字体的 ToUnicode 解码。
+
+### 新增
+
+- **内容流解析**：新增 `PDFContentStreamParser`，可把 `load()` 后的
+  `PDFRawStream`（Flate 压缩内容流）解析成 `PDFOperator[]`；同时给
+  `PDFOperator` / `PDFContentStream` 增加只读访问器，不改动原有写入 API。
+- **文本提取**：新增 `extractText(page)` / `extractTextFromPage(page)`，以及
+  `PDFPage#extractText()` / `PDFPage#extractTextLines()`。标准 14 字体按
+  WinAnsi / Symbol / ZapfDingbats 解码，嵌入字体优先使用 ToUnicode CMap。
+- **文本删除**：新增 `removeTextContaining(page, substring)`，按显示算子删除
+  包含子串的整段文本，返回删除数量；无匹配时不改动页面。
+- **真实基准**：新增 `scripts/benchmark.cjs`。最近一次实测 200 页 × 40 行/页，
+  save 207247 B（202.4 KB），save 89.0 ms，load 29.6 ms，全页提取 85.1 ms，
+  提取字符 385680，save+load 吞吐 1.67 MB/s。
+
+### 修复
+
+- **ToUnicode CMap 被当成未压缩文本**：`context.flateStream(cmap)` 写入的 CMap
+  必须先经 `decodePDFRawStream()` 解压；此前直接读取 `getContents()` 会得到 zlib
+  字节，中文提取恒为空。
+- **多字节码被逐字节误读**：CJK 嵌入字体常见 codespace `<0000><ffff>`，
+  一个字符占 2 字节。现在按 codespace 长度优先匹配，不再把汉字拆成两个错误字符。
+- **内存文档懒嵌入字体**：`save()` 前字体字典尚未 `context.assign`，`context.lookup`
+  为空。现在直接从 `PDFFont` 内部的 fontkit embedder 重建 glyphId → Unicode 映射，
+  避免内存页提取出乱码、删除匹配失效。
+- **算子参数共享数组引用**：解析器曾把同一个 `args` 数组交给所有算子后清空，
+  导致所有算子参数丢失；已改为 `args.slice()`。
+
+### 能力边界（如实说明）
+
+文本提取是「尽力而为」的内容流解释，不是完整的版面/字体模型：不处理旋转文本、
+字形替换；无 ToUnicode 的 CID 字体只能回退；删除是整段显示算子级，不是逐字删除。
+
+### Verification
+
+`yarn typecheck`、`yarn test`（70 suites / 664 tests）、`yarn build`（cjs / es /
+esm / umd / downlevel-dts）全部通过。CJK 回归使用
+`assets/fonts/source_hans_jp/SourceHanSerifJP-Regular.otf` 真嵌入字体，覆盖
+save → load 后的 Flate ToUnicode CMap 中文提取，以及内存页中文删除。
+
 ## 1.18.2 - 2026-11-15
 
 **发布状态更正 / Release status correction**：`1.18.0` 与 `1.18.1` 此前只是仓库内的

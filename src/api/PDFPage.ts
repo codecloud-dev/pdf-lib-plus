@@ -770,6 +770,26 @@ export default class PDFPage {
    * ```
    * @returns The default position of the page.
    */
+  /**
+   * 提取本页的可搜索文本（尽力而为的文本还原）。
+   *
+   * 解释内容流里的文本显示算子（Tj/TJ/'/"），按字体编码还原为 Unicode，
+   * 并按文本定位算子插入换行。支持标准 14 字体与带 ToUnicode 的嵌入字体；
+   * 对无 ToUnicode 的 CID 字体/旋转文本等复杂情形不保证逐字一致。
+   *
+   * @returns 按绘制顺序排列的文本行数组（空页返回空数组）。
+   */
+  extractTextLines(): string[] {
+    // 延迟引入，避免与 PDFPage 形成循环依赖的顶层初始化问题。
+    const { extractTextFromPage } = require('src/api/text_extraction');
+    return extractTextFromPage(this);
+  }
+
+  /** 提取本页文本，行间以 `\n` 连接（extractTextLines 的字符串便捷版）。 */
+  extractText(): string {
+    return this.extractTextLines().join('\n');
+  }
+
   getPosition(): { x: number; y: number } {
     return { x: this.x, y: this.y };
   }

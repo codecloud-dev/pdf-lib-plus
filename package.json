@@ -1,6 +1,6 @@
 {
   "name": "@codecloud-dev/pdf-lib-plus",
-  "version": "1.18.2",
+  "version": "1.18.3",
   "description": "Create and modify PDF files with JavaScript",
   "author": "Andrew Dillon <andrew.dillon.j@gmail.com>",
   "contributors": [
@@ -81,6 +81,7 @@
     "dist/",
     "es/",
     "src/",
+    "docs/",
     "ts3.4",
     "LICENSE.md",
     "package.json",

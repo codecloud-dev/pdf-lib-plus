@@ -59,6 +59,7 @@ export { default as PDFOperator } from 'src/core/operators/PDFOperator';
 export { default as PDFOperatorNames } from 'src/core/operators/PDFOperatorNames';
 
 export { default as PDFObjectParser } from 'src/core/parser/PDFObjectParser';
+export { default as PDFContentStreamParser } from 'src/core/parser/PDFContentStreamParser';
 export { default as PDFObjectStreamParser } from 'src/core/parser/PDFObjectStreamParser';
 export { default as PDFParser } from 'src/core/parser/PDFParser';
 export { default as PDFXRefStreamParser } from 'src/core/parser/PDFXRefStreamParser';

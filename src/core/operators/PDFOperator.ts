@@ -29,6 +29,16 @@ class PDFOperator {
     this.args = args || [];
   }
 
+  /** 只读访问算子名（如 'Tj' / 'TJ'），供内容流解释与文本提取使用。 */
+  getName(): PDFOperatorNames {
+    return this.name;
+  }
+
+  /** 只读访问算子操作数（返回副本，防止外部改写内部状态）。 */
+  getArgs(): PDFOperatorArg[] {
+    return this.args.slice();
+  }
+
   clone(context?: PDFContext): PDFOperator {
     const args = new Array(this.args.length);
     for (let idx = 0, len = args.length; idx < len; idx++) {
