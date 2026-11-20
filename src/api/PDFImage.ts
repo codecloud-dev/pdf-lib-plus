@@ -20,8 +20,12 @@ export default class PDFImage implements Embeddable {
    * @param doc The document to which the image will belong.
    * @param embedder The embedder that will be used to embed the image.
    */
-  static of = (ref: PDFRef, doc: PDFDocument, embedder: ImageEmbedder) =>
-    new PDFImage(ref, doc, embedder);
+  static of = (
+    ref: PDFRef,
+    doc: PDFDocument,
+    embedder: ImageEmbedder,
+    exifOrientation = 1,
+  ) => new PDFImage(ref, doc, embedder, exifOrientation);
 
   /** The unique reference assigned to this image within the document. */
   readonly ref: PDFRef;
@@ -35,10 +39,18 @@ export default class PDFImage implements Embeddable {
   /** The height of this image in pixels. */
   readonly height: number;
 
+  /** EXIF Orientation applied to this image (1 = none). */
+  readonly exifOrientation: number;
+
   private embedder: ImageEmbedder | undefined;
   private embedTask: Promise<PDFRef> | undefined;
 
-  private constructor(ref: PDFRef, doc: PDFDocument, embedder: ImageEmbedder) {
+  private constructor(
+    ref: PDFRef,
+    doc: PDFDocument,
+    embedder: ImageEmbedder,
+    exifOrientation: number,
+  ) {
     assertIs(ref, 'ref', [[PDFRef, 'PDFRef']]);
     assertIs(doc, 'doc', [[PDFDocument, 'PDFDocument']]);
     assertIs(embedder, 'embedder', [
@@ -46,10 +58,12 @@ export default class PDFImage implements Embeddable {
       [PngEmbedder, 'PngEmbedder'],
     ]);
 
+    const rotated = exifOrientation >= 5 && exifOrientation <= 8;
     this.ref = ref;
     this.doc = doc;
-    this.width = embedder.width;
-    this.height = embedder.height;
+    this.width = rotated ? embedder.height : embedder.width;
+    this.height = rotated ? embedder.width : embedder.height;
+    this.exifOrientation = exifOrientation;
 
     this.embedder = embedder;
   }

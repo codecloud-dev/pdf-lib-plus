@@ -6,6 +6,7 @@ import {
   RemovePageFromEmptyDocumentError,
 } from 'src/api/errors';
 import PDFEmbeddedPage from 'src/api/PDFEmbeddedPage';
+import { readJpegExifOrientation } from 'src/api/exif';
 import PDFFont from 'src/api/PDFFont';
 import PDFImage from 'src/api/PDFImage';
 import PDFPage from 'src/api/PDFPage';
@@ -43,6 +44,7 @@ import {
   LoadOptions,
   CreateOptions,
   EmbedFontOptions,
+  EmbedImageOptions,
   SetTitleOptions,
 } from 'src/api/PDFDocumentOptions';
 import PDFObject from 'src/core/objects/PDFObject';
@@ -66,6 +68,12 @@ import FileEmbedder, { AFRelationship } from 'src/core/embedders/FileEmbedder';
 import PDFEmbeddedFile from 'src/api/PDFEmbeddedFile';
 import PDFJavaScript from 'src/api/PDFJavaScript';
 import JavaScriptEmbedder from 'src/core/embedders/JavaScriptEmbedder';
+
+/** `load(..., { lenient: true })` 的返回结构。 */
+export interface LenientLoadResult {
+  doc: PDFDocument;
+  warnings: string[];
+}
 
 /**
  * Represents a PDF document.
@@ -125,29 +133,100 @@ export default class PDFDocument {
    */
   static async load(
     pdf: string | Uint8Array | ArrayBuffer,
+    options: LoadOptions & { lenient: true },
+  ): Promise<LenientLoadResult>;
+  static async load(
+    pdf: string | Uint8Array | ArrayBuffer,
+    options?: LoadOptions,
+  ): Promise<PDFDocument>;
+  static async load(
+    pdf: string | Uint8Array | ArrayBuffer,
     options: LoadOptions = {},
-  ) {
+  ): Promise<PDFDocument | LenientLoadResult> {
     const {
       ignoreEncryption = false,
       parseSpeed = ParseSpeeds.Slow,
       throwOnInvalidObject = false,
       updateMetadata = true,
       capNumbers = false,
+      lenient = false,
     } = options;
 
     assertIs(pdf, 'pdf', ['string', Uint8Array, ArrayBuffer]);
     assertIs(ignoreEncryption, 'ignoreEncryption', ['boolean']);
     assertIs(parseSpeed, 'parseSpeed', ['number']);
     assertIs(throwOnInvalidObject, 'throwOnInvalidObject', ['boolean']);
+    assertIs(lenient, 'lenient', ['boolean']);
 
     const bytes = toUint8Array(pdf);
-    const context = await PDFParser.forBytesWithOptions(
-      bytes,
-      parseSpeed,
-      throwOnInvalidObject,
-      capNumbers,
-    ).parseDocument();
-    return new PDFDocument(context, ignoreEncryption, updateMetadata);
+    const warnings: string[] = [];
+    const originalWarn = console.warn;
+    if (lenient) {
+      console.warn = (...args: any[]) => {
+        warnings.push(args.map(String).join(' '));
+      };
+    }
+
+    try {
+      let context;
+      try {
+        context = await PDFParser.forBytesWithOptions(
+          bytes,
+          parseSpeed,
+          lenient ? false : throwOnInvalidObject,
+          capNumbers,
+        ).parseDocument();
+      } catch (error) {
+        if (!lenient) throw error;
+        warnings.push(
+          `strict parse failed (${
+            (error as Error).message
+          }); retrying with fast lenient parser`,
+        );
+        context = await PDFParser.forBytesWithOptions(
+          bytes,
+          ParseSpeeds.Fastest,
+          false,
+          true,
+        ).parseDocument();
+      }
+
+      const doc = new PDFDocument(
+        context,
+        ignoreEncryption,
+        updateMetadata,
+        bytes,
+        findLastStartXref(bytes),
+      );
+
+      if (
+        lenient &&
+        (!(doc.catalog instanceof PDFCatalog) ||
+          typeof (doc.catalog as any).Pages !== 'function')
+      ) {
+        let pagesRef: PDFRef | undefined;
+        for (const [ref, object] of context.enumerateIndirectObjects()) {
+          // 跨 bundle 时 instanceof 可能因模块双份而失效，用 Type 字典探测更稳。
+          if (typeof (object as any).lookupMaybe !== 'function') continue;
+          const type = (object as any).lookupMaybe(PDFName.of('Type'), PDFName);
+          if (type && type.asString().replace(/^\//, '') === 'Pages') {
+            pagesRef = ref;
+            break;
+          }
+        }
+        if (pagesRef) {
+          const catalog = PDFCatalog.withContextAndPages(context, pagesRef);
+          context.trailerInfo.Root = context.register(catalog);
+          (doc as any).catalog = catalog;
+          (doc as any).pageCache = Cache.populatedBy((doc as any).computePages);
+          warnings.push('recovered catalog from orphaned page tree');
+        }
+      }
+
+      return lenient ? { doc, warnings } : doc;
+    } finally {
+      if (lenient) console.warn = originalWarn;
+    }
   }
 
   /**
@@ -188,11 +267,17 @@ export default class PDFDocument {
   private readonly embeddedPages: PDFEmbeddedPage[];
   private readonly embeddedFiles: PDFEmbeddedFile[];
   private readonly javaScripts: PDFJavaScript[];
+  private readonly imageCache: Map<string, PDFImage>;
+  private readonly originalBytes?: Uint8Array;
+  private readonly originalObjectBytes: Map<string, Uint8Array>;
+  private incrementalXrefOffset?: number;
 
   private constructor(
     context: PDFContext,
     ignoreEncryption: boolean,
     updateMetadata: boolean,
+    originalBytes?: Uint8Array,
+    originalXrefOffset?: number,
   ) {
     assertIs(context, 'context', [[PDFContext, 'PDFContext']]);
     assertIs(ignoreEncryption, 'ignoreEncryption', ['boolean']);
@@ -200,6 +285,17 @@ export default class PDFDocument {
     this.context = context;
     this.catalog = context.lookup(context.trailerInfo.Root) as PDFCatalog;
     this.isEncrypted = !!context.lookup(context.trailerInfo.Encrypt);
+    this.imageCache = new Map();
+    this.originalBytes = originalBytes;
+    this.originalObjectBytes = new Map();
+    this.incrementalXrefOffset = originalXrefOffset;
+
+    // 在 updateMetadata 之前快照，确保元数据变更也会进入增量保存。
+    if (originalBytes) {
+      for (const [ref, object] of context.enumerateIndirectObjects()) {
+        this.originalObjectBytes.set(ref.tag, objectBytes(object));
+      }
+    }
 
     this.pageCache = Cache.populatedBy(this.computePages);
     this.pageMap = new Map();
@@ -1027,13 +1123,25 @@ export default class PDFDocument {
    * @param jpg The input data for a JPEG image.
    * @returns Resolves with the embedded image.
    */
-  async embedJpg(jpg: string | Uint8Array | ArrayBuffer): Promise<PDFImage> {
+  async embedJpg(
+    jpg: string | Uint8Array | ArrayBuffer,
+    options: EmbedImageOptions = {},
+  ): Promise<PDFImage> {
     assertIs(jpg, 'jpg', ['string', Uint8Array, ArrayBuffer]);
+    const { autoCorrectExif = true } = options;
     const bytes = toUint8Array(jpg);
+    const orientation = autoCorrectExif
+      ? readJpegExifOrientation(bytes) || 1
+      : 1;
+    const key = `jpg:${hashBytes(bytes)}:${orientation}`;
+    const cached = this.imageCache.get(key);
+    if (cached) return cached;
+
     const embedder = await JpegEmbedder.for(bytes);
     const ref = this.context.nextRef();
-    const pdfImage = PDFImage.of(ref, this, embedder);
+    const pdfImage = PDFImage.of(ref, this, embedder, orientation);
     this.images.push(pdfImage);
+    this.imageCache.set(key, pdfImage);
     return pdfImage;
   }
 
@@ -1070,10 +1178,15 @@ export default class PDFDocument {
   async embedPng(png: string | Uint8Array | ArrayBuffer): Promise<PDFImage> {
     assertIs(png, 'png', ['string', Uint8Array, ArrayBuffer]);
     const bytes = toUint8Array(png);
+    const key = `png:${hashBytes(bytes)}`;
+    const cached = this.imageCache.get(key);
+    if (cached) return cached;
+
     const embedder = await PngEmbedder.for(bytes);
     const ref = this.context.nextRef();
-    const pdfImage = PDFImage.of(ref, this, embedder);
+    const pdfImage = PDFImage.of(ref, this, embedder, 1);
     this.images.push(pdfImage);
+    this.imageCache.set(key, pdfImage);
     return pdfImage;
   }
 
@@ -1270,12 +1383,14 @@ export default class PDFDocument {
       addDefaultPage = true,
       objectsPerTick = 50,
       updateFieldAppearances = true,
+      incremental = false,
     } = options;
 
     assertIs(useObjectStreams, 'useObjectStreams', ['boolean']);
     assertIs(addDefaultPage, 'addDefaultPage', ['boolean']);
     assertIs(objectsPerTick, 'objectsPerTick', ['number']);
     assertIs(updateFieldAppearances, 'updateFieldAppearances', ['boolean']);
+    assertIs(incremental, 'incremental', ['boolean']);
 
     if (addDefaultPage && this.getPageCount() === 0) this.addPage();
 
@@ -1285,6 +1400,8 @@ export default class PDFDocument {
     }
 
     await this.flush();
+
+    if (incremental) return this.saveIncrementally();
 
     const Writer = useObjectStreams ? PDFStreamWriter : PDFWriter;
     return Writer.forContext(this.context, objectsPerTick).serializeToBuffer();
@@ -1311,6 +1428,85 @@ export default class PDFDocument {
     const bytes = await this.save(otherOptions);
     const base64 = encodeToBase64(bytes);
     return dataUri ? `data:application/pdf;base64,${base64}` : base64;
+  }
+
+  private saveIncrementally(): Uint8Array {
+    if (!this.originalBytes) {
+      throw new Error(
+        'Incremental save requires a document loaded from existing PDF bytes',
+      );
+    }
+
+    const changed: { ref: PDFRef; bytes: Uint8Array }[] = [];
+    for (const [ref, object] of this.context.enumerateIndirectObjects()) {
+      const bytes = objectBytes(object);
+      const previous = this.originalObjectBytes.get(ref.tag);
+      if (!previous || !bytesEqual(previous, bytes)) {
+        changed.push({ ref, bytes });
+      }
+    }
+    if (changed.length === 0) return this.originalBytes.slice();
+
+    changed.sort((a, b) => a.ref.objectNumber - b.ref.objectNumber);
+
+    const chunks: Uint8Array[] = [this.originalBytes];
+    if (
+      this.originalBytes.length &&
+      this.originalBytes[this.originalBytes.length - 1] !== 10
+    ) {
+      chunks.push(asciiBytes('\n'));
+    }
+
+    let maxObjectNumber = 0;
+    const offsets: { ref: PDFRef; offset: number }[] = [];
+    let offset = this.originalBytes.length;
+    for (const { ref, bytes } of changed) {
+      const header = asciiBytes(
+        `${ref.objectNumber} ${ref.generationNumber} obj\n`,
+      );
+      const footer = asciiBytes('\nendobj\n');
+      chunks.push(header, bytes, footer);
+      offsets.push({ ref, offset });
+      offset += header.length + bytes.length + footer.length;
+      maxObjectNumber = Math.max(maxObjectNumber, ref.objectNumber);
+    }
+
+    const xrefOffset = offset;
+    let xref = 'xref\n';
+    for (let i = 0; i < offsets.length; ) {
+      const start = offsets[i].ref.objectNumber;
+      let count = 1;
+      while (
+        i + count < offsets.length &&
+        offsets[i + count].ref.objectNumber === start + count &&
+        offsets[i + count].ref.generationNumber === 0
+      ) {
+        count += 1;
+      }
+      xref += `${start} ${count}\n`;
+      for (let j = 0; j < count; j++) {
+        xref += `${String(offsets[i + j].offset).padStart(10, '0')} 00000 n \n`;
+      }
+      i += count;
+    }
+
+    const trailer = this.context.trailerInfo;
+    const root = trailer.Root ? (trailer.Root as PDFRef).tag : '0 0 R';
+    const info = trailer.Info ? `/Info ${(trailer.Info as PDFRef).tag} ` : '';
+    const id = trailer.ID ? `/ID ${trailer.ID.toString()} ` : '';
+    const prev =
+      this.incrementalXrefOffset !== undefined
+        ? ` /Prev ${this.incrementalXrefOffset}`
+        : '';
+    xref +=
+      `trailer\n<< /Size ${
+        maxObjectNumber + 1
+      } /Root ${root} ${info}${id}${prev} >>\n` +
+      `startxref\n${xrefOffset}\n%%EOF\n`;
+    chunks.push(asciiBytes(xref));
+
+    this.incrementalXrefOffset = xrefOffset;
+    return concatBytes(chunks);
   }
 
   findPageForAnnotationRef(ref: PDFRef): PDFPage | undefined {
@@ -1393,3 +1589,57 @@ function assertIsLiteralOrHexString(
     throw new UnexpectedObjectTypeError([PDFHexString, PDFString], pdfObject);
   }
 }
+
+const objectBytes = (object: PDFObject): Uint8Array => {
+  const bytes = new Uint8Array(object.sizeInBytes());
+  object.copyBytesInto(bytes, 0);
+  return bytes;
+};
+
+const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+const asciiBytes = (text: string): Uint8Array => {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0xff;
+  return bytes;
+};
+
+const concatBytes = (chunks: Uint8Array[]): Uint8Array => {
+  let total = 0;
+  for (const chunk of chunks) total += chunk.length;
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return out;
+};
+
+const hashBytes = (bytes: Uint8Array): string => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16);
+};
+
+const findLastStartXref = (bytes: Uint8Array): number | undefined => {
+  let latin = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    latin += String.fromCharCode.apply(
+      null,
+      bytes.subarray(i, i + chunkSize) as unknown as number[],
+    );
+  }
+  const idx = latin.lastIndexOf('startxref');
+  if (idx < 0) return undefined;
+  const match = /startxref\s+(\d+)/.exec(latin.slice(idx));
+  return match ? parseInt(match[1], 10) : undefined;
+};

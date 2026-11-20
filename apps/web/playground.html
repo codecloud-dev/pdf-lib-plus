@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>pdf-lib-plus 本地 playground</title>
+    <style>
+      body {
+        font: 15px/1.6 system-ui, sans-serif;
+        max-width: 900px;
+        margin: 40px auto;
+        padding: 0 20px;
+      }
+      textarea {
+        width: 100%;
+        height: 260px;
+        font-family: ui-monospace, monospace;
+      }
+      button {
+        padding: 8px 16px;
+        margin: 8px 8px 8px 0;
+      }
+      .hint {
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>pdf-lib-plus 本地 playground</h1>
+    <p class="hint">
+      文件只在浏览器内存里处理，不上传。先运行 <code>yarn build</code> 生成
+      dist。
+    </p>
+    <input id="file" type="file" accept="application/pdf" />
+    <input id="query" placeholder="搜索文本" value="SECRET" />
+    <button id="extract">提取文本</button>
+    <button id="search">搜索并框选</button>
+    <button id="redact">脱敏并下载</button>
+    <pre id="out">等待选择 PDF…</pre>
+    <script src="../../dist/pdf-lib.min.js"></script>
+    <script>
+      const out = document.getElementById('out');
+      let pdfDoc = null;
+      document.getElementById('file').addEventListener('change', async (e) => {
+        const bytes = await e.target.files[0].arrayBuffer();
+        pdfDoc = await PDFLib.PDFDocument.load(bytes, { lenient: true }).then(
+          (r) => (r.doc ? r.doc : r),
+        );
+        out.textContent = `已加载 ${pdfDoc.getPageCount()} 页`;
+      });
+      document.getElementById('extract').onclick = () => {
+        if (!pdfDoc) return (out.textContent = '请先选择 PDF');
+        out.textContent = pdfDoc
+          .getPages()
+          .map((p, i) => `--- page ${i + 1} ---\n${p.extractText()}`)
+          .join('\n');
+      };
+      document.getElementById('search').onclick = () => {
+        if (!pdfDoc) return (out.textContent = '请先选择 PDF');
+        const q = document.getElementById('query').value;
+        const hits = pdfDoc
+          .getPages()
+          .flatMap((p, i) =>
+            p.searchText(q).map((r) => ({ page: i + 1, ...r })),
+          );
+        out.textContent = JSON.stringify(hits, null, 2);
+      };
+      document.getElementById('redact').onclick = async () => {
+        if (!pdfDoc) return (out.textContent = '请先选择 PDF');
+        const q = document.getElementById('query').value;
+        pdfDoc.getPages().forEach((p) => p.redactText(q));
+        const bytes = await pdfDoc.save({ incremental: true });
+        const url = URL.createObjectURL(
+          new Blob([bytes], { type: 'application/pdf' }),
+        );
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'redacted.pdf';
+        a.click();
+        out.textContent = `已脱敏并下载，${q} 的文本字形已删除`;
+      };
+    </script>
+  </body>
+</html>

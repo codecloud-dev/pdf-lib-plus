@@ -8,6 +8,47 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.19.0 - 2026-11-20
+
+按用户提供的功能路标做「能力变现」，不追加密 / PDF-A / 签名这些已被竞品吃透的方向，
+把本分支已有的内容流解析能力扩展成可搜索、可脱敏、可替换、可增量保存的真实能力。
+每个能力都配可运行复现：`node examples/roadmap-demo.cjs`。
+
+### 新增
+
+- **EXIF 自动纠正**：`embedJpg(bytes, { autoCorrectExif: true })` 读取 APP1/Exif
+  Orientation，`drawImage` 自动按 8 种方向旋转 / 镜像并对齐包围盒；
+  `autoCorrectExif: false` 保留原行为。手机竖拍照片不再躺倒。
+- **宽容加载与诊断报告**：`load(bytes, { lenient: true })` 返回 `{ doc, warnings }`；
+  收集解析器警告，严格解析失败时回退快速宽容解析，并可从孤立页树恢复 Catalog。
+- **带坐标文本层**：`page.extractTextRuns()` 返回 `{ text, x, y, width, height,
+  font, fontSize }`；`page.searchText(query)` 返回可直接画框的矩形。
+- **真脱敏**：`page.redactText(query)` 删除匹配文本显示算子并画黑色覆盖框，
+  不是只画黑框留原文。
+- **原位文本替换**：`await page.replaceText(query, replacement)` 用 Helvetica
+  在命中位置重绘替换文本。
+- **增量保存**：`doc.save({ incremental: true })` 保留原文件字节，只追加变化对象与
+  新 xref 段；连续增量保存会串成 `/Prev` 链。
+- **图片去重**：相同图片字节复用同一 XObject ref，避免重复嵌入把 PDF 撑大。
+- **浏览器 playground**：`apps/web/playground.html` 本地提取 / 搜索 / 脱敏 / 下载，
+  全程不上传。
+
+### 修复 / 真实性
+
+- `removeTextContaining()` 重建内容流后把页面缓存指向新建流，后续
+  `drawText` / `drawRectangle` 不再追加到第二个流导致提取顺序错乱。
+- 守门 example 必须真跑：`yarn build && node examples/roadmap-demo.cjs` 真输出
+  `ROADMAP_DEMO_OK`，测试覆盖 save → load 的真实路径，不靠内存态假绿。
+
+### 验证
+
+`yarn typecheck`、`yarn test`（71 suites / 674 tests）、`yarn lint`、全格式
+`yarn build`、`node examples/roadmap-demo.cjs`、`npm pack --dry-run` 全部真跑通过。
+
+**真实基准**（`node scripts/benchmark.cjs 200`，200 页 × 40 行/页，本机实测，
+数值随机器负载波动）：构造 179.2 ms、save 207245 B / 86.2 ms、load 39.7 ms、
+全页 extractText 90.5 ms、提取 385680 字符、save+load 吞吐 1.57 MB/s。
+
 ## 1.18.4 - 2026-11-18
 
 本版继续只做**不改公开 API** 的可靠性维护，直接修复 pdf-lib 公开仓库里两个

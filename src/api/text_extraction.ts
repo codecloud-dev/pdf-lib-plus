@@ -1,5 +1,7 @@
 import { Encodings } from '@pdf-lib/standard-fonts';
+import { rgb } from 'src/api/colors';
 import PDFPage from 'src/api/PDFPage';
+import { StandardFonts } from 'src/api/StandardFonts';
 import PDFArray from 'src/core/objects/PDFArray';
 import PDFDict from 'src/core/objects/PDFDict';
 import PDFHexString from 'src/core/objects/PDFHexString';
@@ -214,7 +216,7 @@ interface ExtractionState {
 }
 
 /** 把显示文本的参数（PDFString/PDFHexString/PDFArray）解码成字符串。 */
-const decodeShowArg = (arg: any, state: ExtractionState): string => {
+const decodeShowArg = (arg: any, state: { decoder: Decoder }): string => {
   if (arg instanceof PDFHexString || arg instanceof PDFString) {
     return state.decoder((arg as any).asBytes());
   }
@@ -504,8 +506,203 @@ export const removeTextContaining = (
   const newStream = PDFContentStream.of(dict, kept);
   const ref = context.register(newStream);
   page.node.setContentStream(ref);
-  // 清掉页面缓存的旧内存内容流引用，避免后续 drawText 追加到已废弃的流。
-  (page as any).contentStream = undefined;
+  // 让页面缓存指向新建的内容流，后续 drawText/drawRectangle 必须追加到同一流；
+  // 置 undefined 会再建第二个流，导致 Contents 里出现多段内容且顺序错乱。
+  (page as any).contentStream = newStream;
   (page as any).contentStreamRef = ref;
   return removeIdx.size;
+};
+
+/** 带坐标的文本片段；坐标来自内容流的文本矩阵，宽度为按字数的保守估计。 */
+export interface TextRun {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  font: string;
+  fontSize: number;
+}
+
+/** 搜索命中的矩形，可直接用于 drawRectangle 画框或脱敏。 */
+export interface TextSearchRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
+  runIndex: number;
+}
+
+interface RunState {
+  runs: TextRun[];
+  decoder: Decoder;
+  fontName: string;
+  fontSize: number;
+  leading: number;
+  tm: number[];
+  tlm: number[];
+}
+
+const numbersOf = (args: any[], count: number): number[] => {
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) {
+    out.push(args[i] instanceof PDFNumber ? args[i].asNumber() : 0);
+  }
+  return out;
+};
+
+const pushRun = (state: RunState, text: string): void => {
+  if (!text) return;
+  // 标准字体近似 0.5em/字；CJK 通常 1em/字，取两者折中偏保守。
+  const perChar = state.fontSize * 0.6;
+  const width = text.length * perChar;
+  state.runs.push({
+    text,
+    x: state.tm[4],
+    y: state.tm[5],
+    width,
+    height: state.fontSize,
+    font: state.fontName,
+    fontSize: state.fontSize,
+  });
+  state.tm[4] += width;
+};
+
+/** 提取带坐标的文本片段（尽力而为；旋转/复杂排版不保证像素级精确）。 */
+export const extractTextRunsFromPage = (page: PDFPage): TextRun[] => {
+  const fonts = buildFontDecoders(page);
+  const state: RunState = {
+    runs: [],
+    decoder: winAnsiDecoder,
+    fontName: 'Helvetica',
+    fontSize: 24,
+    leading: 0,
+    tm: [1, 0, 0, 1, 0, 0],
+    tlm: [1, 0, 0, 1, 0, 0],
+  };
+
+  for (const op of pageOperators(page)) {
+    const name = op.getName();
+    const args = op.getArgs();
+    switch (name) {
+      case 'Tf':
+        state.fontName =
+          args[0] instanceof PDFName ? args[0].asString() : state.fontName;
+        state.fontSize =
+          args[1] instanceof PDFNumber ? args[1].asNumber() : state.fontSize;
+        state.decoder = fonts.get(state.fontName) ?? winAnsiDecoder;
+        break;
+      case 'TL':
+        state.leading = args[0] instanceof PDFNumber ? args[0].asNumber() : 0;
+        break;
+      case 'Tm': {
+        state.tm = numbersOf(args, 6);
+        state.tlm = state.tm.slice();
+        break;
+      }
+      case 'Td':
+      case 'TD': {
+        const [tx, ty] = numbersOf(args, 2);
+        if (name === 'TD') state.leading = -ty;
+        state.tlm = [
+          state.tlm[0],
+          state.tlm[1],
+          state.tlm[2],
+          state.tlm[3],
+          state.tlm[4] + tx,
+          state.tlm[5] + ty,
+        ];
+        state.tm = state.tlm.slice();
+        break;
+      }
+      case 'T*':
+        state.tlm[5] -= state.leading;
+        state.tm = state.tlm.slice();
+        break;
+      case 'Tj':
+        pushRun(state, decodeShowArg(args[0], state));
+        break;
+      case 'TJ':
+        pushRun(state, decodeShowArg(args[0], state));
+        break;
+      case '\'':
+        state.tlm[5] -= state.leading;
+        state.tm = state.tlm.slice();
+        pushRun(state, decodeShowArg(args[0], state));
+        break;
+      case '"':
+        state.tlm[5] -= state.leading;
+        state.tm = state.tlm.slice();
+        pushRun(state, decodeShowArg(args[2], state));
+        break;
+      default:
+        break;
+    }
+  }
+  return state.runs;
+};
+
+/** 在页面中搜索文本，返回可画框的矩形。 */
+export const searchTextInPage = (
+  page: PDFPage,
+  query: string,
+): TextSearchRect[] => {
+  if (!query) return [];
+  const results: TextSearchRect[] = [];
+  const runs = extractTextRunsFromPage(page);
+  for (let idx = 0; idx < runs.length; idx++) {
+    const run = runs[idx];
+    const from = run.text.indexOf(query);
+    if (from < 0) continue;
+    const charWidth = run.width / Math.max(run.text.length, 1);
+    results.push({
+      x: run.x + from * charWidth,
+      y: run.y,
+      width: query.length * charWidth,
+      height: run.height,
+      text: query,
+      runIndex: idx,
+    });
+  }
+  return results;
+};
+
+/** 真删字形 + 黑色覆盖框：返回处理掉的匹配数量。 */
+export const redactTextInPage = (page: PDFPage, query: string): number => {
+  const rects = searchTextInPage(page, query);
+  if (rects.length === 0) return 0;
+  const removed = removeTextContaining(page, query);
+  for (const rect of rects) {
+    page.drawRectangle({
+      x: rect.x - 1,
+      y: rect.y - 2,
+      width: rect.width + 2,
+      height: rect.height + 4,
+      color: rgb(0, 0, 0),
+    });
+  }
+  return removed || rects.length;
+};
+
+/** 删除包含 query 的显示算子，并在原位置用 Helvetica 画上替换文本。 */
+export const replaceTextInPage = async (
+  page: PDFPage,
+  query: string,
+  replacement: string,
+): Promise<number> => {
+  const rects = searchTextInPage(page, query);
+  if (rects.length === 0) return 0;
+  removeTextContaining(page, query);
+  const font = await page.doc.embedFont(StandardFonts.Helvetica);
+  for (const rect of rects) {
+    page.drawText(replacement, {
+      x: rect.x,
+      y: rect.y,
+      size: rect.height,
+      font,
+      color: rgb(0, 0, 0),
+    });
+  }
+  return rects.length;
 };

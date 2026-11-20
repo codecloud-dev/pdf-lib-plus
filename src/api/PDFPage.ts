@@ -15,6 +15,7 @@ import {
   LineCapStyle,
   scale,
 } from 'src/api/operators';
+import { exifDrawTransform } from 'src/api/exif';
 import PDFDocument from 'src/api/PDFDocument';
 import PDFEmbeddedPage from 'src/api/PDFEmbeddedPage';
 import PDFFont from 'src/api/PDFFont';
@@ -790,6 +791,32 @@ export default class PDFPage {
     return this.extractTextLines().join('\n');
   }
 
+  /** 提取带坐标的文本片段（尽力而为的位置还原）。 */
+  extractTextRuns(): import('src/api/text_extraction').TextRun[] {
+    const { extractTextRunsFromPage } = require('src/api/text_extraction');
+    return extractTextRunsFromPage(this);
+  }
+
+  /** 搜索文本并返回可画框矩形。 */
+  searchText(
+    query: string,
+  ): import('src/api/text_extraction').TextSearchRect[] {
+    const { searchTextInPage } = require('src/api/text_extraction');
+    return searchTextInPage(this, query);
+  }
+
+  /** 真删文本并画黑色覆盖框。 */
+  redactText(query: string): number {
+    const { redactTextInPage } = require('src/api/text_extraction');
+    return redactTextInPage(this, query);
+  }
+
+  /** 原位替换文本（用 Helvetica 重绘）。 */
+  async replaceText(query: string, replacement: string): Promise<number> {
+    const { replaceTextInPage } = require('src/api/text_extraction');
+    return replaceTextInPage(this, query, replacement);
+  }
+
   getPosition(): { x: number; y: number } {
     return { x: this.x, y: this.y };
   }
@@ -1086,13 +1113,39 @@ export default class PDFPage {
     });
 
     const contentStream = this.getContentStream();
+    const transform = exifDrawTransform(image.exifOrientation);
+    const drawWidth = options.width ?? image.size().width;
+    const drawHeight = options.height ?? image.size().height;
+    const x = options.x ?? this.x;
+    const y = options.y ?? this.y;
+    const rotateDegrees =
+      transform.rotateDegrees +
+      (options.rotate ? toDegrees(options.rotate) : 0);
+    const scaleX = transform.flipX ? -drawWidth : drawWidth;
+    const scaleY = transform.flipY ? -drawHeight : drawHeight;
+    const radians = (rotateDegrees * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const corners = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ].map(([u, v]) => {
+      const px = u * scaleX;
+      const py = v * scaleY;
+      return [px * cos - py * sin, px * sin + py * cos];
+    });
+    const minX = Math.min(...corners.map((c) => c[0]));
+    const minY = Math.min(...corners.map((c) => c[1]));
+
     contentStream.push(
       ...drawImage(xObjectKey, {
-        x: options.x ?? this.x,
-        y: options.y ?? this.y,
-        width: options.width ?? image.size().width,
-        height: options.height ?? image.size().height,
-        rotate: options.rotate ?? degrees(0),
+        x: x - minX,
+        y: y - minY,
+        width: scaleX,
+        height: scaleY,
+        rotate: degrees(rotateDegrees),
         xSkew: options.xSkew ?? degrees(0),
         ySkew: options.ySkew ?? degrees(0),
         graphicsState: graphicsStateKey,
