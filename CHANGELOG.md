@@ -8,6 +8,12 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.19.2 - 2026-11-21
+
+### 变更
+
+- 发布工作流改用 CI 凭据认证并保留 OIDC provenance；包功能无变化。
+
 ## 1.19.1 - 2026-11-21
 
 按外部实测报告补上「看起来对、字节级不对」的漏洞，并收口发布元数据。
