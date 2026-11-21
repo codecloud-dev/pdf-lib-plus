@@ -8,6 +8,16 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.19.3 - 2026-11-21
+
+### 变更
+
+- 修正 `exports` 条件顺序：移除顶层 `browser` 字符串与其导出分支，带
+  `browser` 条件的打包器不再命中 448 KB 的 UMD 预打包产物，可正常 tree-shaking；
+  UMD 继续由 `unpkg` 字段提供。
+- 发布包排除所有 `*.map`（约 8.6 MB），文件数 1590 → 1014，解压体积 16.6 MB → 7.2 MB；
+  source map 仍可通过 `./dist/*` 导出从 CDN 获取。
+
 ## 1.19.2 - 2026-11-21
 
 ### 变更

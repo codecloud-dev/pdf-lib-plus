@@ -1,6 +1,6 @@
 {
   "name": "@codecloud-dev/pdf-lib-plus",
-  "version": "1.19.2",
+  "version": "1.19.3",
   "description": "Create and modify PDF files with JavaScript",
   "author": "Andrew Dillon <andrew.dillon.j@gmail.com>",
   "contributors": [
@@ -89,7 +89,8 @@
     "README.md",
     "README.zh.md",
     "ROADMAP.md",
-    "apps/web/playground.html"
+    "apps/web/playground.html",
+    "!**/*.map"
   ],
   "dependencies": {
     "@pdf-lib/standard-fonts": "^1.0.0",
@@ -156,11 +157,9 @@
     "access": "public",
     "registry": "https://registry.npmjs.org/"
   },
-  "browser": "dist/pdf-lib.min.js",
   "exports": {
     ".": {
       "types": "./cjs/index.d.ts",
-      "browser": "./dist/pdf-lib.min.js",
       "import": "./es/index.js",
       "require": "./cjs/index.js",
       "default": "./cjs/index.js"
