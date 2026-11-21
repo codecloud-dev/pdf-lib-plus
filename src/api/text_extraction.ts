@@ -7,7 +7,6 @@ import PDFDict from 'src/core/objects/PDFDict';
 import PDFHexString from 'src/core/objects/PDFHexString';
 import PDFName from 'src/core/objects/PDFName';
 import PDFNumber from 'src/core/objects/PDFNumber';
-import PDFObject from 'src/core/objects/PDFObject';
 import PDFRef from 'src/core/objects/PDFRef';
 import PDFStream from 'src/core/objects/PDFStream';
 import PDFString from 'src/core/objects/PDFString';
@@ -237,80 +236,6 @@ const decodeShowArg = (arg: any, state: { decoder: Decoder }): string => {
   return '';
 };
 
-const flushLine = (state: ExtractionState) => {
-  if (state.line.length) {
-    state.lines.push(state.line.replace(/\s+$/, ''));
-    state.line = '';
-  }
-};
-
-/** 解释一组算子，做文本提取。 */
-const interpret = (
-  operators: PDFOperator[],
-  fonts: Map<string, Decoder>,
-): string[] => {
-  const state: ExtractionState = {
-    line: '',
-    lines: [],
-    decoder: winAnsiDecoder,
-  };
-  for (const op of operators) {
-    const name = op.getName();
-    const args = op.getArgs();
-    switch (name) {
-      case 'Tf': {
-        const fontName = args[0] instanceof PDFName ? args[0].asString() : '';
-        state.decoder = fonts.get(fontName) ?? winAnsiDecoder;
-        break;
-      }
-      case 'Tj':
-        state.line += decodeShowArg(args[0], state);
-        break;
-      case 'TJ':
-        state.line += decodeShowArg(args[0], state);
-        break;
-      case '\'': // 换行并显示
-        flushLine(state);
-        if (args[0]) state.line += decodeShowArg(args[0], state);
-        break;
-      case '"': // 设置字距/词距 + 换行 + 显示
-        flushLine(state);
-        if (args[2]) state.line += decodeShowArg(args[2], state);
-        break;
-      case 'Td':
-      case 'TD': {
-        // 只有纵向移动（第二个操作数非 0）才换行；同一行内的横向移动不换行。
-        const y = args[1] instanceof PDFNumber ? args[1].asNumber() : 0;
-        if (y !== 0) flushLine(state);
-        break;
-      }
-      case 'T*':
-        flushLine(state);
-        break;
-      case 'Tm': {
-        // 文本矩阵：y 分量（索引 5）变化视为换行。
-        const y = args[5] instanceof PDFNumber ? args[5].asNumber() : 0;
-        if (
-          state.line &&
-          (state as any)._lastTmY !== undefined &&
-          (state as any)._lastTmY !== y
-        ) {
-          flushLine(state);
-        }
-        (state as any)._lastTmY = y;
-        break;
-      }
-      case 'ET':
-        flushLine(state);
-        break;
-      default:
-        break;
-    }
-  }
-  flushLine(state);
-  return state.lines;
-};
-
 /**
  * 内存文档里字体字典是懒嵌入的：embedFont 只分配 ref，真正 context.assign 发生在 save。
  * 所以 save 前 context.lookup(ref) 为空；此时直接从 PDFFont 内部的 embedder/fontkit 对象
@@ -347,11 +272,13 @@ const decoderFromEmbeddedFont = (pdfFont: any): Decoder | undefined => {
   };
 };
 
-/** 从页面 Resources.Font 构建 fontName → Decoder 映射。 */
-const buildFontDecoders = (page: PDFPage): Map<string, Decoder> => {
+/** 从任意 Resources 字典构建 fontName → Decoder 映射。 */
+const buildFontDecodersFromResources = (
+  context: any,
+  resources: PDFDict | undefined,
+  doc: PDFDocumentLike,
+): Map<string, Decoder> => {
   const map = new Map<string, Decoder>();
-  const context = page.doc.context;
-  const resources = page.node.Resources();
   if (!resources) return map;
   const fontsDict = resources.lookupMaybe(PDFName.of('Font'), PDFDict);
   if (!fontsDict) return map;
@@ -367,7 +294,7 @@ const buildFontDecoders = (page: PDFPage): Map<string, Decoder> => {
     if (!fontDict) {
       // save 前的内存字体：从 PDFFont 内部的 fontkit 对象重建解码表。
       if (refObj instanceof PDFRef) {
-        const internalFonts: any[] = (page.doc as any).fonts || [];
+        const internalFonts: any[] = (doc as any).fonts || [];
         const pdfFont = internalFonts.find((f) => f && f.ref === refObj);
         const decoder = decoderFromEmbeddedFont(pdfFont);
         if (decoder) {
@@ -378,9 +305,7 @@ const buildFontDecoders = (page: PDFPage): Map<string, Decoder> => {
       continue;
     }
 
-    // ToUnicode CMap 优先。
-    // 注意：同 context 里该值可能是 PDFRawStream 本体而非 PDFRef；
-    // 用 lookupMaybe(PDFRef) 会对非 ref 抛 UnexpectedObjectTypeError（CJK 嵌入字体实测抓到）。
+    // ToUnicode CMap 优先。同 context 里该值可能是 PDFRawStream 本体而非 PDFRef。
     const toUnicodeRaw = fontDict.get(PDFName.of('ToUnicode'));
     let cmapStream: PDFStream | undefined;
     if (toUnicodeRaw instanceof PDFStream) cmapStream = toUnicodeRaw;
@@ -391,8 +316,6 @@ const buildFontDecoders = (page: PDFPage): Map<string, Decoder> => {
     }
     if (cmapStream) {
       try {
-        // ToUnicode 由 context.flateStream(cmap) 写入，Filter=FlateDecode。
-        // 必须先按 PDF 流解码，否则拿到的只是 zlib 压缩字节，CMap 解析必为空。
         const cmapBytes = decodePDFRawStream(cmapStream as any).decode();
         map.set(fontName, decodeToUnicode(cmapBytes));
         continue;
@@ -406,114 +329,421 @@ const buildFontDecoders = (page: PDFPage): Map<string, Decoder> => {
   return map;
 };
 
-/** 把页 Contents（单流或流数组）解析为算子。 */
-const pageOperators = (page: PDFPage): PDFOperator[] => {
-  const contents = page.node.Contents();
-  if (!contents) return [];
-  const context = page.doc.context;
-  const streams: PDFObject[] =
-    contents instanceof PDFArray
-      ? Array.from({ length: contents.size() }, (_, i) => contents.get(i))
-      : [contents];
+type Matrix = [number, number, number, number, number, number];
 
-  const ops: PDFOperator[] = [];
-  for (const s of streams) {
-    const stream =
-      s instanceof PDFRef
-        ? context.lookupMaybe(s, PDFStream)
-        : (s as PDFStream);
-    if (!stream) continue;
-    if (stream instanceof PDFContentStream) {
-      ops.push(...stream.getOperators());
-    } else {
-      try {
-        ops.push(
-          ...PDFContentStreamParser.fromPDFRawStream(
-            stream as any,
-            context,
-          ).parseOperators(),
-        );
-      } catch {
-        /* 单个流解析失败跳过，尽量提取其它流 */
-      }
-    }
+const numbersOf = (args: any[], count: number): number[] => {
+  const out: number[] = [];
+  for (let i = 0; i < count; i++) {
+    out.push(args[i] instanceof PDFNumber ? args[i].asNumber() : 0);
   }
-  return ops;
+  return out;
 };
 
-/** 提取页面文本，按行返回。 */
+const IDENTITY_MATRIX: Matrix = [1, 0, 0, 1, 0, 0];
+
+/** CTM × M；用于在父变换坐标系里应用子流/cm 的局部变换。 */
+const mulMatrix = (a: Matrix, b: Matrix): Matrix => [
+  a[0] * b[0] + a[1] * b[2],
+  a[0] * b[1] + a[1] * b[3],
+  a[2] * b[0] + a[3] * b[2],
+  a[2] * b[1] + a[3] * b[3],
+  a[4] * b[0] + a[5] * b[2] + b[4],
+  a[4] * b[1] + a[5] * b[3] + b[5],
+];
+
+const applyMatrix = (m: Matrix, x: number, y: number): [number, number] => [
+  m[0] * x + m[2] * y + m[4],
+  m[1] * x + m[3] * y + m[5],
+];
+
+const matrixFromArray = (value: unknown): Matrix => {
+  if (!(value instanceof PDFArray) || value.size() < 6) return IDENTITY_MATRIX;
+  const out = [] as unknown as Matrix;
+  for (let i = 0; i < 6; i++) {
+    const n = value.lookup(i);
+    out[i] = n instanceof PDFNumber ? n.asNumber() : IDENTITY_MATRIX[i];
+  }
+  return out;
+};
+
+/** 一段可写回的内容流（页面 Contents 或 Form XObject）。 */
+interface ContentSource {
+  /** 原始算子，写回时原样保留未删部分。 */
+  ops: PDFOperator[];
+  fonts: Map<string, Decoder>;
+  kind: 'page' | 'xobject';
+  /** 该流在 context 中的 ref；直接嵌入的流没有 ref。 */
+  streamRef?: PDFRef;
+  /** xobject 场景下用于写回 Resources/XObject 字典。 */
+  xobjectsDict?: PDFDict;
+  xobjectName?: string;
+  /** 父坐标系到该流坐标系的累计变换。 */
+  baseMatrix: Matrix;
+  /** 原始流字典，写回 XObject 时保留 Subtype/BBox/Resources。 */
+  originalDict?: PDFDict;
+}
+
+/** 带解码器与坐标系的算子，避免 XObject 资源名冲突。 */
+interface LocatedOp {
+  op: PDFOperator;
+  decoder: Decoder;
+  source: ContentSource;
+  ctm: Matrix;
+}
+
+const parseStreamOperators = (
+  stream: PDFStream,
+  context: any,
+): PDFOperator[] => {
+  if (stream instanceof PDFContentStream) return stream.getOperators();
+  try {
+    return PDFContentStreamParser.fromPDFRawStream(
+      stream as any,
+      context as any,
+    ).parseOperators();
+  } catch {
+    return [];
+  }
+};
+
+const resolveStream = (
+  value: unknown,
+  context: any,
+): { stream?: PDFStream; ref?: PDFRef } => {
+  if (value instanceof PDFRef) {
+    const stream = context.lookupMaybe(value, PDFStream) as
+      | PDFStream
+      | undefined;
+    return stream ? { stream, ref: value } : {};
+  }
+  return value instanceof PDFStream ? { stream: value } : {};
+};
+
+/**
+ * 收集页内容与 Form XObject 内容。
+ *
+ * 真实世界 PDF（Word / 打印驱动 / 排版软件）常把正文放进 Form XObject，
+ * 只递归读取 page.Contents 会静默漏掉全文。这里做有界递归：
+ * · 深度上限 8，visited 防循环引用；
+ * · 保留每个 XObject 自己的 Resources/Font，避免资源名冲突；
+ * · 累计 cm 与 /Matrix，给搜索/脱敏返回可用的页面坐标；
+ * · 记录 ref 以便脱敏后写回并删除旧流，杜绝字节级泄漏。
+ */
+const collectSources = (page: PDFPage): ContentSource[] => {
+  const context = page.doc.context;
+  const pageResources = page.node.Resources();
+  const sources: ContentSource[] = [];
+  const visited = new Set<unknown>();
+  const contents = page.node.Contents();
+  const streams: unknown[] =
+    contents instanceof PDFArray
+      ? Array.from({ length: contents.size() }, (_, i) => contents.get(i))
+      : contents
+      ? [contents]
+      : [];
+
+  const enqueue = (
+    value: unknown,
+    inheritedResources: PDFDict | undefined,
+    baseMatrix: Matrix,
+    depth: number,
+    xobjectInfo?: {
+      xobjectsDict: PDFDict;
+      xobjectName: string;
+    },
+  ) => {
+    if (depth > 8) return;
+    const { stream, ref } = resolveStream(value, context);
+    if (!stream) return;
+    const key = ref ?? stream;
+    if (visited.has(key)) return;
+    visited.add(key);
+
+    const dictResources = stream.dict.lookupMaybe(
+      PDFName.of('Resources'),
+      PDFDict,
+    );
+    const resources = dictResources ?? inheritedResources;
+    const source: ContentSource = {
+      ops: parseStreamOperators(stream, context),
+      fonts: buildFontDecodersFromResources(
+        context,
+        resources,
+        page.doc as any,
+      ),
+      kind: depth === 0 ? 'page' : 'xobject',
+      streamRef: ref,
+      baseMatrix,
+      originalDict: stream.dict,
+      ...(xobjectInfo ?? {}),
+    };
+    sources.push(source);
+
+    // 再扫一遍 Do：只有 Form XObject 递归，Image 等保持原样。
+    const xobjects = resources?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+    if (!xobjects) return;
+    let ctm = baseMatrix;
+    const stack: Matrix[] = [];
+    for (const op of source.ops) {
+      const name = op.getName();
+      const args = op.getArgs();
+      if (name === 'q') {
+        stack.push(ctm.slice() as Matrix);
+        continue;
+      }
+      if (name === 'Q') {
+        ctm = stack.pop() ?? IDENTITY_MATRIX;
+        continue;
+      }
+      if (name === 'cm') {
+        const nums = numbersOf(args, 6);
+        if (nums.length === 6) ctm = mulMatrix(ctm, nums as Matrix);
+        continue;
+      }
+      if (name !== 'Do') continue;
+      const rawName = args[0] instanceof PDFName ? args[0].asString() : '';
+      const xname = rawName.replace(/^\//, '');
+      if (!xname) continue;
+      const entry = xobjects.get(PDFName.of(xname));
+      const child = resolveStream(entry, context);
+      if (!child.stream) continue;
+      const subtype = child.stream.dict.lookupMaybe(
+        PDFName.of('Subtype'),
+        PDFName,
+      );
+      const subtypeName = subtype ? subtype.asString().replace(/^\//, '') : '';
+      if (subtypeName !== 'Form') continue;
+      const childMatrix = mulMatrix(
+        ctm,
+        matrixFromArray(child.stream.dict.lookup(PDFName.of('Matrix'))),
+      );
+      enqueue(entry, resources, childMatrix, depth + 1, {
+        xobjectsDict: xobjects,
+        xobjectName: xname,
+      });
+    }
+  };
+
+  for (const s of streams) enqueue(s, pageResources, IDENTITY_MATRIX, 0);
+  return sources;
+};
+
+const collectLocatedOps = (
+  page: PDFPage,
+  sources: ContentSource[] = collectSources(page),
+): LocatedOp[] => {
+  const out: LocatedOp[] = [];
+  for (const source of sources) {
+    let ctm = source.baseMatrix;
+    const stack: Matrix[] = [];
+    for (const op of source.ops) {
+      const name = op.getName();
+      const args = op.getArgs();
+      if (name === 'q') {
+        stack.push(ctm.slice() as Matrix);
+      } else if (name === 'Q') {
+        ctm = stack.pop() ?? IDENTITY_MATRIX;
+      } else if (name === 'cm') {
+        const nums = numbersOf(args, 6);
+        if (nums.length === 6) ctm = mulMatrix(ctm, nums as Matrix);
+      }
+      // 字体状态在 interpret / redact 里随 Tf 跟踪，这里只按当前 Tf 名取解码器。
+      const fontName =
+        name === 'Tf' && args[0] instanceof PDFName ? args[0].asString() : '';
+      out.push({
+        op,
+        decoder: fontName
+          ? source.fonts.get(fontName) ?? winAnsiDecoder
+          : winAnsiDecoder,
+        source,
+        ctm,
+      });
+    }
+  }
+  return out;
+};
+
+/** 把页 Contents（含 Form XObject 递归）解析为带坐标系的算子。 */
+const pageOperators = (page: PDFPage): LocatedOp[] => collectLocatedOps(page);
+
+interface InterpretState {
+  line: string;
+  lines: string[];
+  decoder: Decoder;
+  fontName: string;
+}
+
+/** 解释算子为文本行。 */
+const interpret = (located: LocatedOp[]): string[] => {
+  const state: InterpretState = {
+    line: '',
+    lines: [],
+    decoder: winAnsiDecoder,
+    fontName: 'Helvetica',
+  };
+  for (const item of located) {
+    const name = item.op.getName();
+    const args = item.op.getArgs();
+    switch (name) {
+      case 'BT':
+        if (state.line) state.lines.push(state.line);
+        state.line = '';
+        break;
+      case 'ET':
+        if (state.line) state.lines.push(state.line);
+        state.line = '';
+        break;
+      case 'Tf':
+        state.fontName =
+          args[0] instanceof PDFName ? args[0].asString() : state.fontName;
+        state.decoder = item.source.fonts.get(state.fontName) ?? winAnsiDecoder;
+        break;
+      case 'Td':
+      case 'TD':
+      case 'T*':
+      case 'Tm':
+        if (state.line) state.lines.push(state.line);
+        state.line = '';
+        break;
+      case 'Tj':
+      case 'TJ':
+      case '\'':
+      case '"': {
+        const arg =
+          name === 'Tj' || name === 'TJ' ? args[0] : args[args.length - 1];
+        const temp: ExtractionState = {
+          line: '',
+          lines: [],
+          decoder: state.decoder,
+        };
+        state.line += decodeShowArg(arg, temp);
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  if (state.line) state.lines.push(state.line);
+  return state.lines;
+};
+
+/** 提取页面文本，按行返回（含 Form XObject 中的文本）。 */
 export const extractTextFromPage = (page: PDFPage): string[] =>
-  interpret(pageOperators(page), buildFontDecoders(page));
+  interpret(pageOperators(page));
 
 /** 提取页面文本，合并为单个字符串（行间以 \n 连接）。 */
 export const extractText = (page: PDFPage): string =>
   extractTextFromPage(page).join('\n');
 
+type PDFDocumentLike = {
+  context: any;
+  fonts?: any[];
+  embedFont: (font: unknown) => Promise<unknown>;
+};
+
+/** 把删除后的算子写回来源流，并物理删除被替换的旧流对象。 */
+const writeBackSource = (
+  page: PDFPage,
+  source: ContentSource,
+  kept: PDFOperator[],
+): void => {
+  const context = page.doc.context;
+  const newStream = PDFContentStream.of(
+    source.originalDict ? source.originalDict.clone(context) : context.obj({}),
+    kept,
+  );
+  const newRef = context.register(newStream);
+
+  if (source.kind === 'page') {
+    const before = page.node.Contents();
+    page.node.setContentStream(newRef);
+    if ((page as any).contentStreamRef !== newRef) {
+      const oldRefs: PDFRef[] = [];
+      if (before instanceof PDFRef) oldRefs.push(before);
+      else if (before instanceof PDFArray) {
+        for (let i = 0; i < before.size(); i++) {
+          const item = before.get(i);
+          if (item instanceof PDFRef) oldRefs.push(item);
+        }
+      }
+      for (const ref of oldRefs) {
+        if (ref !== newRef) context.delete(ref);
+      }
+    }
+    (page as any).contentStream = newStream;
+    (page as any).contentStreamRef = newRef;
+    return;
+  }
+
+  if (source.xobjectsDict && source.xobjectName) {
+    source.xobjectsDict.set(PDFName.of(source.xobjectName), newRef);
+    if (source.streamRef && source.streamRef !== newRef) {
+      context.delete(source.streamRef);
+    }
+  }
+};
+
 /**
- * 删除页面中「解码文本包含给定子串」的文本显示算子（文本删除 / redaction 基础）。
+ * 删除「解码文本包含给定子串」的文本显示算子。
  *
- * 行为：解析页面内容流，找到 Tj / TJ / ' / " 算子中解码后含 `substring` 的，
- * 连同其紧邻的换行算子（T* / ' / " 自带的换行语义）一并移除，其余绘图算子
- * 原样保留，然后用一个新内容流整体替换本页内容。
+ * 行为：递归解析页面与 Form XObject 内容流，逐来源删除命中的 Tj/TJ/'/" 算子，
+ * 其余绘图算子原样写回，并 `context.delete()` 旧流对象——否则旧字节仍留在
+ * 保存后的 PDF 里，`strings` 一捞就能还原被脱敏内容。
  *
- * 边界（诚实说明）：删除的是「整段显示算子」，不是逐字删除——若一段 Tj 里
- * 只有部分文字匹配，整段都会被移除。这是内容流模型的固有限制，符合
- * pdf-lib 一贯的「绘制指令而非文本模型」语义。
+ * 边界（诚实说明）：删除的是「整段显示算子」，不是逐字删除；旋转/极复杂
+ * 文本矩阵不保证像素级覆盖。
  *
- * @returns 被删除的显示算子数量（0 表示没有匹配，页面未改动）。
+ * @returns 被删除的显示算子数量（0 表示没有匹配，文件未改动）。
  */
 export const removeTextContaining = (
   page: PDFPage,
   substring: string,
 ): number => {
   if (!substring) return 0;
-  const fonts = buildFontDecoders(page);
-  const ops = pageOperators(page);
-  const context = page.doc.context;
-
-  // 第一遍：标记要删除的算子索引，同时跟踪 Tf 以正确解码后续文本。
-  const removeIdx = new Set<number>();
+  const sources = collectSources(page);
+  const located = collectLocatedOps(page, sources);
+  const removeIdx = new Map<ContentSource, Set<number>>();
   let activeDecoder: Decoder = winAnsiDecoder;
-  for (let i = 0; i < ops.length; i++) {
-    const op = ops[i];
-    const name = op.getName();
-    const args = op.getArgs();
+
+  // 第一遍：按来源标记要删除的算子索引。
+  for (const item of located) {
+    const name = item.op.getName();
+    const args = item.op.getArgs();
     if (name === 'Tf') {
       const fn = args[0] instanceof PDFName ? args[0].asString() : '';
-      activeDecoder = fonts.get(fn) ?? winAnsiDecoder;
+      activeDecoder = item.source.fonts.get(fn) ?? winAnsiDecoder;
       continue;
     }
     if (name === 'Tj' || name === 'TJ' || name === '\'' || name === '"') {
-      let arg: any;
-      if (name === 'Tj' || name === 'TJ') arg = args[0];
-      else arg = args[args.length - 1];
-      if (arg) {
-        const st: ExtractionState = {
-          line: '',
-          lines: [],
-          decoder: activeDecoder,
-        };
-        const text = decodeShowArg(arg, st);
-        if (text.includes(substring)) removeIdx.add(i);
+      const arg =
+        name === 'Tj' || name === 'TJ' ? args[0] : args[args.length - 1];
+      if (!arg) continue;
+      const st: ExtractionState = {
+        line: '',
+        lines: [],
+        decoder: activeDecoder,
+      };
+      if (decodeShowArg(arg, st).includes(substring)) {
+        const set = removeIdx.get(item.source) ?? new Set<number>();
+        const idx = item.source.ops.indexOf(item.op);
+        if (idx >= 0) set.add(idx);
+        removeIdx.set(item.source, set);
       }
     }
   }
-  if (removeIdx.size === 0) return 0;
 
-  // 第二遍：保留未删除算子，重建内容流。
-  const kept = ops.filter((_, i) => !removeIdx.has(i));
-  const dict = context.obj({});
-  const newStream = PDFContentStream.of(dict, kept);
-  const ref = context.register(newStream);
-  page.node.setContentStream(ref);
-  // 让页面缓存指向新建的内容流，后续 drawText/drawRectangle 必须追加到同一流；
-  // 置 undefined 会再建第二个流，导致 Contents 里出现多段内容且顺序错乱。
-  (page as any).contentStream = newStream;
-  (page as any).contentStreamRef = ref;
-  return removeIdx.size;
+  let removed = 0;
+  for (const source of sources) {
+    const set = removeIdx.get(source);
+    if (!set || set.size === 0) continue;
+    const kept = source.ops.filter((_, i) => !set.has(i));
+    writeBackSource(page, source, kept);
+    removed += set.size;
+  }
+  return removed;
 };
 
-/** 带坐标的文本片段；坐标来自内容流的文本矩阵，宽度为按字数的保守估计。 */
+/** 带坐标的文本片段；坐标来自内容流文本矩阵，宽度为按字数的保守估计。 */
 export interface TextRun {
   text: string;
   x: number;
@@ -544,34 +774,32 @@ interface RunState {
   tlm: number[];
 }
 
-const numbersOf = (args: any[], count: number): number[] => {
-  const out: number[] = [];
-  for (let i = 0; i < count; i++) {
-    out.push(args[i] instanceof PDFNumber ? args[i].asNumber() : 0);
-  }
-  return out;
-};
-
-const pushRun = (state: RunState, text: string): void => {
+const pushRun = (
+  state: RunState,
+  text: string,
+  ctm: Matrix,
+  fontSize: number,
+): void => {
   if (!text) return;
-  // 标准字体近似 0.5em/字；CJK 通常 1em/字，取两者折中偏保守。
-  const perChar = state.fontSize * 0.6;
+  const perChar = fontSize * 0.6;
   const width = text.length * perChar;
+  const [x, y] = applyMatrix(ctm, state.tm[4], state.tm[5]);
+  const sx = Math.hypot(ctm[0], ctm[1]) || 1;
+  const sy = Math.hypot(ctm[2], ctm[3]) || 1;
   state.runs.push({
     text,
-    x: state.tm[4],
-    y: state.tm[5],
-    width,
-    height: state.fontSize,
+    x,
+    y,
+    width: width * sx,
+    height: fontSize * sy,
     font: state.fontName,
-    fontSize: state.fontSize,
+    fontSize: fontSize * sy,
   });
   state.tm[4] += width;
 };
 
-/** 提取带坐标的文本片段（尽力而为；旋转/复杂排版不保证像素级精确）。 */
+/** 提取带坐标的文本片段（含 Form XObject；尽力而为，不保证像素级精确）。 */
 export const extractTextRunsFromPage = (page: PDFPage): TextRun[] => {
-  const fonts = buildFontDecoders(page);
   const state: RunState = {
     runs: [],
     decoder: winAnsiDecoder,
@@ -582,16 +810,16 @@ export const extractTextRunsFromPage = (page: PDFPage): TextRun[] => {
     tlm: [1, 0, 0, 1, 0, 0],
   };
 
-  for (const op of pageOperators(page)) {
-    const name = op.getName();
-    const args = op.getArgs();
+  for (const item of pageOperators(page)) {
+    const name = item.op.getName();
+    const args = item.op.getArgs();
     switch (name) {
       case 'Tf':
         state.fontName =
           args[0] instanceof PDFName ? args[0].asString() : state.fontName;
         state.fontSize =
           args[1] instanceof PDFNumber ? args[1].asNumber() : state.fontSize;
-        state.decoder = fonts.get(state.fontName) ?? winAnsiDecoder;
+        state.decoder = item.source.fonts.get(state.fontName) ?? winAnsiDecoder;
         break;
       case 'TL':
         state.leading = args[0] instanceof PDFNumber ? args[0].asNumber() : 0;
@@ -621,20 +849,18 @@ export const extractTextRunsFromPage = (page: PDFPage): TextRun[] => {
         state.tm = state.tlm.slice();
         break;
       case 'Tj':
-        pushRun(state, decodeShowArg(args[0], state));
-        break;
       case 'TJ':
-        pushRun(state, decodeShowArg(args[0], state));
+        pushRun(state, decodeShowArg(args[0], state), item.ctm, state.fontSize);
         break;
       case '\'':
         state.tlm[5] -= state.leading;
         state.tm = state.tlm.slice();
-        pushRun(state, decodeShowArg(args[0], state));
+        pushRun(state, decodeShowArg(args[0], state), item.ctm, state.fontSize);
         break;
       case '"':
         state.tlm[5] -= state.leading;
         state.tm = state.tlm.slice();
-        pushRun(state, decodeShowArg(args[2], state));
+        pushRun(state, decodeShowArg(args[2], state), item.ctm, state.fontSize);
         break;
       default:
         break;
@@ -643,7 +869,7 @@ export const extractTextRunsFromPage = (page: PDFPage): TextRun[] => {
   return state.runs;
 };
 
-/** 在页面中搜索文本，返回可画框的矩形。 */
+/** 在页面中搜索文本，返回可画框的矩形（含 Form XObject）。 */
 export const searchTextInPage = (
   page: PDFPage,
   query: string,
@@ -685,22 +911,30 @@ export const redactTextInPage = (page: PDFPage, query: string): number => {
   return removed || rects.length;
 };
 
-/** 删除包含 query 的显示算子，并在原位置用 Helvetica 画上替换文本。 */
+/**
+ * 删除包含 query 的显示算子，并在原位置画上替换文本。
+ *
+ * 为了不再“中文直接抛 WinAnsi cannot encode”，字体由调用方显式传入；
+ * 未传时退回标准 Helvetica 并保留原字号语义（不再强行取 rect.height）。
+ */
 export const replaceTextInPage = async (
   page: PDFPage,
   query: string,
   replacement: string,
+  options: { font?: unknown; size?: number } = {},
 ): Promise<number> => {
   const rects = searchTextInPage(page, query);
   if (rects.length === 0) return 0;
   removeTextContaining(page, query);
-  const font = await page.doc.embedFont(StandardFonts.Helvetica);
+  const font =
+    options.font ?? (await page.doc.embedFont(StandardFonts.Helvetica));
+  const size = options.size ?? Math.max(rects[0].height, 8);
   for (const rect of rects) {
     page.drawText(replacement, {
       x: rect.x,
       y: rect.y,
-      size: rect.height,
-      font,
+      size,
+      font: font as never,
       color: rgb(0, 0, 0),
     });
   }

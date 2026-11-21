@@ -159,8 +159,20 @@ export default class PDFDocument {
     assertIs(lenient, 'lenient', ['boolean']);
 
     const bytes = toUint8Array(pdf);
+    const lastStartXref = findLastStartXref(bytes);
     const warnings: string[] = [];
     const originalWarn = console.warn;
+    if (lenient) {
+      if (
+        bytes[0] !== 0x25 ||
+        bytes[1] !== 0x50 ||
+        bytes[2] !== 0x44 ||
+        bytes[3] !== 0x46
+      ) {
+        warnings.push('missing %PDF header');
+      }
+      if (lastStartXref === undefined) warnings.push('missing startxref');
+    }
     if (lenient) {
       console.warn = (...args: any[]) => {
         warnings.push(args.map(String).join(' '));
@@ -196,7 +208,7 @@ export default class PDFDocument {
         ignoreEncryption,
         updateMetadata,
         bytes,
-        findLastStartXref(bytes),
+        lastStartXref,
       );
 
       if (

@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/npm/v/@codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff&label=npm&logo=npm&logoColor=white" alt="npm: v1.19.0"></a>
+  <a href="https://www.npmjs.com/package/@codecloud-dev/pdf-lib-plus"><img src="https://img.shields.io/npm/v/@codecloud-dev/pdf-lib-plus?style=flat-square&color=8a7bff&label=npm&logo=npm&logoColor=white" alt="npm: v1.19.1"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/codecloud-dev/pdf-lib-plus/ci.yml?branch=master&style=flat-square&label=CI" alt="CI"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/codecloud-dev/pdf-lib-plus?style=flat-square&color=37d5d3" alt="License"></a>
   <a href="https://github.com/codecloud-dev/pdf-lib-plus/stargazers"><img src="https://img.shields.io/github/stars/codecloud-dev/pdf-lib-plus?style=flat-square&color=ff7ac3" alt="Stars"></a>
@@ -54,7 +54,7 @@
 | 老项目要改代码吗 | **几乎不用**。公开 API 与 `pdf-lib` 完全一致，只把包名换成 `@codecloud-dev/pdf-lib-plus` |
 | 修了什么 | 日期解析 ReDoS、JPEG marker 越界/死循环、xref `/W` 宽度、解码流解压炸弹、SVG / JPEG 视图 / Error 原型链，以及 1.18.4 的 `removeField()` 悬空 `/Annots` 与 `PDFRef` / `PDFName` 弱引用池，见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/RELIABILITY.md](docs/RELIABILITY.md) |
 | 测试覆盖 | 71 套件 / **674 用例**，`typecheck` + `test` + 全格式 `build` 全绿 |
-| 1.19.0 新能力 | EXIF 自动纠正、宽容加载诊断、带坐标文本层、搜索、真脱敏、原位替换、图片去重、增量保存、[本地 playground](apps/web/playground.html) |
+| 1.19.1 新能力 | EXIF 自动纠正、宽容加载诊断、带坐标文本层、搜索、真脱敏、原位替换、图片去重、增量保存、[本地 playground](apps/web/playground.html) |
 | 中文文档 | [README.zh.md](README.zh.md) 有完整的中文安装、示例与工具链说明 |
 | 许可证 | MIT，保留原作者全部版权声明 |
 

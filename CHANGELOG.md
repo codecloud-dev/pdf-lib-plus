@@ -8,6 +8,32 @@ API and the original MIT license. The upstream project has not published a
 release since 2022, so this fork begins by closing the security issues that
 were reported upstream but never fixed in a release.
 
+## 1.19.1 - 2026-11-21
+
+按外部实测报告补上「看起来对、字节级不对」的漏洞，并收口发布元数据。
+
+### 安全修复
+
+- **脱敏不再留孤儿流**：`redactText()` / `removeTextContaining()` 重建内容流后，
+  立即 `context.delete()` 旧的 `/Contents`（含数组分支）和 Form XObject 流 ref。
+  保存后的 PDF 里不再残留被删文字的压缩字节；回归测试
+  `tests/api/redaction-leak.spec.ts` 逐个解码流验证。
+- **Form XObject 递归**：`extractText()` / `searchText()` / `redactText()` 现在会
+  有界递归 `/Fm0 Do` 引用的 Form XObject，保留各自 `/Resources` 与累计坐标变换；
+  不再对 Word / 打印驱动常见结构静默返回 0。
+
+### 修复
+
+- `replaceText(query, replacement, { font, size })` 可传自定义字体与字号，
+  避免中文固定 Helvetica 抛 `WinAnsi cannot encode`；默认字号不再硬取 `rect.height`。
+- `lenient: true` 的 `warnings` 现在会记录缺失 `%PDF` 头、缺失 `startxref`、
+  严格解析失败回退与 Catalog 恢复，不再是恒 0 的空数组。
+- 包字段补齐 `exports` / `browser`，`bugs.url` 改回本项目，发布归档移除 `yarn.lock`。
+
+### 验证
+
+`yarn lint` / `yarn build` / `yarn test`（72 suites / 676 tests）全部通过。
+
 ## 1.19.0 - 2026-11-20
 
 按用户提供的功能路标做「能力变现」，不追加密 / PDF-A / 签名这些已被竞品吃透的方向，

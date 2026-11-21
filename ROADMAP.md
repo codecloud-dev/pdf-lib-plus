@@ -24,7 +24,7 @@
 | 口碑 | 宽容加载 + 诊断报告 | ✅ | `PDFDocument.load(bytes, { lenient: true })` → `{ doc, warnings }` |
 | 护城河 | 带坐标文本层 | ✅ | `page.extractTextRuns()` → `{ text, x, y, width, height, font, fontSize }` |
 | 护城河 | 文本搜索 | ✅ | `page.searchText(query)` → 可画框矩形 |
-| 护城河 | 真脱敏 | ✅ | `page.redactText(query)`：删字形 + 黑色覆盖框（调用方仍应自行清元数据） |
+| 护城河 | 真脱敏 | ✅ | `page.redactText(query)`：删字形 + 黑色覆盖框 + 物理删除旧流；覆盖 Form XObject（调用方仍应自行清元数据） |
 | 护城河 | 原位文本替换 | ✅ | `await page.replaceText(query, replacement)` |
 | 信任 | 体积治理 | ✅（图片层） | 相同图片字节复用同一 XObject ref，避免重复嵌入 |
 | 信任 | 增量保存 | ✅ | `doc.save({ incremental: true })`：保留原文件字节，只追加改动对象 + xref |
