@@ -1,0 +1,41 @@
+# GitHub OIDC 可信发布：推 v* tag 时用临时令牌发 npm，带 provenance。
+# 前置（仅一次，在 npmjs.com 包设置页完成，不传长效 token）：
+#   Package: @codecloud-dev/pdf-lib-plus → Settings → Trusted Publishers
+#   Publisher: GitHub Actions
+#   Repository: codecloud-dev/pdf-lib-plus
+#   Workflow: publish.yml
+#   Environment: 留空
+#
+# 未显式启用变量时跳过，避免推 tag 误发包。需要发布时在仓库
+# Settings → Secrets and variables → Actions → Variables 把
+# ENABLE_NPM_PUBLISH 设为 true，再推 tag 或手动 Re-run。
+
+name: Publish to npm (OIDC)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    if: ${{ vars.ENABLE_NPM_PUBLISH == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: yarn install --frozen-lockfile
+      - name: Test
+        run: yarn test
+      - name: Build
+        run: yarn build
+      - name: Publish (provenance, no token)
+        run: npm publish --provenance --access public
